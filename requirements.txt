@@ -2,3 +2,6 @@ pandas
 requests
 yfinance
 ta
+ta
+supabase
+python-dotenv
