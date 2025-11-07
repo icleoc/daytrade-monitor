@@ -2,6 +2,12 @@ import os
 import time
 from supabase import create_client, Client
 
+import os
+print("DEBUG VARIÁVEIS:")
+print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
+print("SUPABASE_ANON_KEY:", os.getenv("SUPABASE_ANON_KEY")[:10], "...")
+
+
 # Função para colorir os logs no terminal
 def log(msg, tipo="info"):
     cores = {
