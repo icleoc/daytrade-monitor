@@ -11,6 +11,4 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: POLL_INTERVAL
-
-        value: "60"
         value: "60"
