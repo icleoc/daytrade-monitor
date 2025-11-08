@@ -94,6 +94,16 @@ if __name__ == "__main__":
         try:
             monitorar_sinais()
             time.sleep(POLL_INTERVAL)
+
+
+        def main():
+    print("✅ Bot de monitoramento VWAP iniciado.")
+    # Aqui você pode chamar a função que inicia seu loop principal, ex:
+    # start_monitoring()
+    # por enquanto deixamos só um print para testar o deploy
+
+if __name__ == "__main__":
+    main()
         except Exception as e:
             print(f"⚠️ Erro no loop principal: {e}")
             time.sleep(10)
