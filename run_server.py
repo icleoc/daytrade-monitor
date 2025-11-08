@@ -50,3 +50,14 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     print(f"🌐 Servidor Flask rodando na porta {port}")
     app.run(host="0.0.0.0", port=port)
+
+def start_bot():
+    print("🤖 Iniciando loop de monitoramento VWAP...")
+    try:
+        while True:
+            # Aqui você chama a função principal de monitoramento
+            main()
+            time.sleep(int(os.getenv("POLL_INTERVAL", 60)))  # intervalo de checagem
+    except KeyboardInterrupt:
+        print("🛑 Bot encerrado manualmente.")
+
