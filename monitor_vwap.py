@@ -1,45 +1,68 @@
 import os
-
-from supabase import create_client, Client
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    print("❌ Configure SUPABASE_URL e SUPABASE_ANON_KEY nas variáveis de ambiente.")
-    exit(1)
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-print("✅ Conectado ao Supabase!")
-data = {"ativo": "TESTE", "preco": 1234.56}
-supabase.table("ativos").insert(data).execute()
-print("💾 Teste de inserção enviado com sucesso.")
-
-
-
-print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
-anon_key = os.getenv("SUPABASE_ANON_KEY")
-print("SUPABASE_ANON_KEY:", anon_key[:8] + "..." if anon_key else "❌ NÃO ENCONTRADA")
-
-if not os.getenv("SUPABASE_URL") or not anon_key:
-    print("❌ Variáveis de ambiente não configuradas corretamente no Render.")
-    print("➡️ Vá em Settings → Environment → Add Environment Variable e adicione:")
-    print("SUPABASE_URL e SUPABASE_ANON_KEY")
-else:
-    print("✅ Variáveis detectadas com sucesso! Tudo certo.")
-
 import time
+from supabase import create_client, Client
+from datetime import datetime
+import random  # usado para simular preço; substitua pela API real depois
 
-print("🚀 Iniciando monitoramento em loop infinito...")
+# -----------------------------
+# Configurações do Supabase
+# -----------------------------
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
-while True:
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    raise ValueError("❌ Configure SUPABASE_URL e SUPABASE_ANON_KEY nas variáveis de ambiente.")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+# -----------------------------
+# Ativos e intervalo
+# -----------------------------
+ASSETS = os.getenv("ASSETS", "XAU/USD,BTC/USD,EUR/USD,IBOV").split(",")
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 60))
+
+# -----------------------------
+# Função para simular VWAP (substituir por cálculo real depois)
+# -----------------------------
+def get_vwap_simulado(asset):
+    # Simula um preço aleatório
+    return round(random.uniform(100, 200), 2)
+
+# -----------------------------
+# Função para gravar no Supabase
+# -----------------------------
+def gravar_vwap(asset, price):
+    data = {
+        "ativo": asset,
+        "preco": price,
+        "timestamp": datetime.utcnow().isoformat()
+    }
     try:
-        # Aqui entra sua função principal de monitoramento, por exemplo:
-        monitorar_vwap()
-
-        time.sleep(int(os.getenv("POLL_INTERVAL", "60")))  # espera 60 segundos
+        supabase.table("ativos").insert(data).execute()
+        print(f"💾 VWAP de {asset} gravado: {price}")
     except Exception as e:
-        print(f"⚠️ Erro no loop principal: {e}")
-        time.sleep(10)
+        print(f"⚠️ Erro ao gravar {asset}: {e}")
 
+# -----------------------------
+# Função principal de monitoramento
+# -----------------------------
+def monitorar_vwap():
+    print(f"⏱️ Checando VWAPs dos ativos: {', '.join(ASSETS)}")
+    for asset in ASSETS:
+        price = get_vwap_simulado(asset)
+        gravar_vwap(asset, price)
+
+# -----------------------------
+# Loop principal
+# -----------------------------
+if __name__ == "__main__":
+    print("✅ Conectado ao Supabase!")
+    print(f"🚀 Iniciando monitoramento em loop infinito a cada {POLL_INTERVAL} segundos...")
+    
+    while True:
+        try:
+            monitorar_vwap()
+            time.sleep(POLL_INTERVAL)
+        except Exception as e:
+            print(f"⚠️ Erro no loop principal: {e}")
+            time.sleep(10)
