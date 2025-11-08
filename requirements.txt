@@ -5,3 +5,4 @@ ta
 supabase
 selenium
 python-dotenv
+flask
