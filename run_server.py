@@ -1,20 +1,25 @@
-from flask import Flask
-import threading
-from monitor_vwap import start_bot, conectar_supabase
+from flask import Flask, render_template
+from supabase import create_client, Client
+import os
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return "🚀 VWAP Bot ativo e monitorando!"
+# Configurações do Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@app.route('/status')
-def status():
-    return {"status": "online", "supabase": conectar_supabase()}
+@app.route("/")
+def dashboard():
+    try:
+        # Busca os últimos 50 sinais da tabela 'ativos'
+        response = supabase.table("ativos").select("*").order("timestamp", desc=True).limit(50).execute()
+        data = response.data
+    except Exception as e:
+        data = []
+        print("Erro ao carregar dados:", e)
 
-def run_bot():
-    start_bot()
+    return render_template("dashboard.html", sinais=data)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
