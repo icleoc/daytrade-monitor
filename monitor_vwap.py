@@ -16,14 +16,17 @@ print("✅ Conectado ao Supabase!")
 
 # Função que insere dados no Supabase (simulação de sinal VWAP)
 def registrar_sinal(ativo, preco, direcao):
-    data = {
-        "ativo": ativo,
-        "preco": preco,
-        "direcao": direcao,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
-    supabase.table("ativos").insert(data).execute()
-    print(f"📊 Sinal registrado: {ativo} - {direcao} @ {preco}")
+    try:
+        data = {
+            "ativo": ativo,
+            "preco": preco,
+            "direcao": direcao,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        supabase.table("ativos").insert(data).execute()
+        print(f"📊 Sinal registrado: {ativo} - {direcao} @ {preco}")
+    except Exception as e:
+        print(f"❌ Erro ao registrar sinal: {e}")
 
 # Função principal (loop do bot)
 def main():
