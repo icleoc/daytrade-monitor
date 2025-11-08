@@ -1,50 +1,65 @@
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from supabase import create_client, Client
 
-# Conecta ao Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 60))
+ASSETS = os.getenv("ASSETS", "BTC/USD,ETH/USD").split(",")
 
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    print("❌ Configure SUPABASE_URL e SUPABASE_ANON_KEY nas variáveis de ambiente.")
-    exit()
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-print("✅ Conectado ao Supabase!")
 
-# Função que insere dados no Supabase (simulação de sinal VWAP)
-def registrar_sinal(ativo, preco, direcao):
+def conectar_supabase():
+    """Verifica conexão com Supabase"""
     try:
         data = {
-            "ativo": ativo,
-            "preco": preco,
-            "direcao": direcao,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "mensagem": "Teste de conexão OK"
         }
-        supabase.table("ativos").insert(data).execute()
-        print(f"📊 Sinal registrado: {ativo} - {direcao} @ {preco}")
+        supabase.table("logs").insert(data).execute()
+        print("✅ Conectado ao Supabase!")
+        return True
     except Exception as e:
-        print(f"❌ Erro ao registrar sinal: {e}")
+        print(f"❌ Erro ao conectar Supabase: {e}")
+        return False
 
-# Função principal (loop do bot)
+
+def calcular_vwap(asset: str):
+    """Função simulada (substitua com lógica real de VWAP)"""
+    import random
+    preco = random.uniform(100, 200)
+    vwap = random.uniform(100, 200)
+    sinal = "COMPRA" if preco < vwap else "VENDA"
+    return {"ativo": asset, "preco": preco, "vwap": vwap, "sinal": sinal}
+
+
+def enviar_sinal(sinal):
+    """Envia sinal ao Supabase"""
+    try:
+        supabase.table("sinais").insert(sinal).execute()
+        print(f"💾 Sinal inserido: {sinal}")
+    except Exception as e:
+        print(f"❌ Falha ao inserir sinal: {e}")
+
+
 def main():
-    print("✅ Bot de monitoramento VWAP iniciado...")
+    """Executa uma rodada de cálculo VWAP"""
+    print(f"\n⏰ {datetime.now().strftime('%H:%M:%S')} — Iniciando rodada de monitoramento...")
+    for asset in ASSETS:
+        sinal = calcular_vwap(asset.strip())
+        enviar_sinal(sinal)
+    print("✅ Rodada concluída.")
+
+
+def start_bot():
+    """Loop contínuo — usado pelo Flask (run_server.py)"""
+    print("🤖 Iniciando loop contínuo do bot VWAP...")
+    if not conectar_supabase():
+        print("❌ Erro de conexão. Encerrando bot.")
+        return
+
     while True:
-        try:
-            # Simulação de leitura de preço (placeholder)
-            ativo = "BTC/USD"
-            preco = 70000.00  # Exemplo
-            direcao = "compra"
-
-            registrar_sinal(ativo, preco, direcao)
-
-            print("⏳ Aguardando próximo ciclo...")
-            time.sleep(60)  # 1 minuto entre execuções
-        except Exception as e:
-            print(f"❌ Erro no loop principal: {e}")
-            time.sleep(10)
-
-if __name__ == "__main__":
-    main()
+        main()
+        time.sleep(POLL_INTERVAL)
