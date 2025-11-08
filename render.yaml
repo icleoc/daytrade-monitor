@@ -1,15 +1,15 @@
 services:
-  - type: worker
+  - type: web
     name: vwap-monitor
     env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python monitor_vwap.py"
+    startCommand: "python run_server.py"
     envVars:
       - key: SUPABASE_URL
-        sync: false
+        value: https://czzwmetwlfmotegsiqfl.supabase.co
       - key: SUPABASE_ANON_KEY
-        sync: false
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6endtZXR3bGZtb3RlZ3NpcWZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0ODY1NTMsImV4cCI6MjA3ODA2MjU1M30.sbeTuE8n2QdpkCyutXjpYipjAQaadrEcOESiOI6Yjgs
       - key: POLL_INTERVAL
         value: "60"
       - key: ASSETS
