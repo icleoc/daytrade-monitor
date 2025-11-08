@@ -1,7 +1,7 @@
 from flask import Flask
 from supabase import create_client, Client
 import os
-from monitor_vwap import main  # agora essa função existe!
+from monitor_vwap import main
 
 app = Flask(__name__)
 
