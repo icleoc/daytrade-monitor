@@ -1,19 +1,20 @@
-import threading
-import time
 from flask import Flask
-from monitor_vwap import main  # importa seu bot
+from supabase import create_client, Client
+import os
+from monitor_vwap import main  # agora essa função existe!
 
-# Cria servidor Flask para o Render detectar uma porta aberta
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "Bot VWAP ativo e monitorando..."
+# Conexão Supabase
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_ANON_KEY")
+supabase: Client = create_client(url, key)
+print("✅ Conectado ao Supabase com sucesso!")
 
-def start_bot():
-    # Executa o monitor em paralelo
-    main()
+@app.route("/")
+def index():
+    return "🚀 Bot VWAP está rodando no Render!"
 
 if __name__ == "__main__":
-    threading.Thread(target=start_bot).start()
+    main()  # inicia o bot
     app.run(host="0.0.0.0", port=10000)
