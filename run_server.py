@@ -52,7 +52,8 @@ if __name__ == '__main__':
     app.run(host="0.0.0.0", port=port)
 
 def start_bot():
-    print("🤖 Iniciando loop de monitoramento VWAP...")
+    print("🤖 Executando monitor VWAP uma vez (loop já está no main).")
+    main()
     try:
         while True:
             # Aqui você chama a função principal de monitoramento
