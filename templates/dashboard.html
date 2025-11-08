@@ -2,63 +2,71 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Painel VWAP - Sinais em Tempo Real</title>
     <meta http-equiv="refresh" content="30">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor VWAP — Sinais em Tempo Real</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
             background-color: #0f172a;
-            color: #f8fafc;
-            margin: 0;
-            padding: 20px;
+            color: #fff;
+            font-family: "Segoe UI", sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 30px;
+            min-height: 100vh;
         }
         h1 {
-            color: #38bdf8;
+            font-size: 2rem;
+            margin-bottom: 20px;
             text-align: center;
         }
-        table {
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 30px;
+            max-width: 1000px;
         }
-        th, td {
-            padding: 12px;
+        .card {
+            border-radius: 16px;
+            padding: 20px;
             text-align: center;
-            border-bottom: 1px solid #1e293b;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: transform 0.2s ease;
         }
-        th {
-            background-color: #1e293b;
-        }
-        tr:hover {
-            background-color: #334155;
+        .card:hover { transform: scale(1.05); }
+        .buy { background-color: #16a34a; }  /* Verde */
+        .sell { background-color: #dc2626; } /* Vermelho */
+        .neutral { background-color: #475569; } /* Cinza */
+        .hora {
+            font-size: 0.9em;
+            color: #e2e8f0;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>📊 Painel VWAP - Últimos Sinais</h1>
-    <p style="text-align:center;">Atualização automática a cada 30 s</p>
+    <h1>📊 Monitor VWAP — Sinais em Tempo Real</h1>
+    <div class="container">
+        {% for s in sinais %}
+        <div class="card {% if s.tipo == 'compra' %}buy{% elif s.tipo == 'venda' %}sell{% else %}neutral{% endif %}">
+            <h2>{{ s.ativo }}</h2>
+            <p><strong>{{ s.mensagem }}</strong></p>
+            <div class="hora">⏰ <span class="hora-local" data-utc="{{ s.timestamp }}"></span></div>
+        </div>
+        {% endfor %}
+    </div>
+    <p style="margin-top: 30px; color: #94a3b8;">Atualizando automaticamente a cada 30 segundos...</p>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Ativo</th>
-                <th>Preço</th>
-                <th>VWAP</th>
-                <th>Condição</th>
-                <th>Horário</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in sinais %}
-            <tr>
-                <td>{{ s['ativo'] }}</td>
-                <td>{{ s['preco'] }}</td>
-                <td>{{ s['vwap'] }}</td>
-                <td>{{ s['condicao'] }}</td>
-                <td>{{ s['timestamp'] }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <script>
+        // Converte UTC → horário local automaticamente
+        document.querySelectorAll('.hora-local').forEach(el => {
+            const utcTime = el.dataset.utc;
+            const local = new Date(utcTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            el.textContent = local;
+        });
+    </script>
 </body>
 </html>
