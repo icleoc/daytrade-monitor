@@ -6,3 +6,4 @@ supabase
 selenium
 python-dotenv
 flask
+gunicorn
