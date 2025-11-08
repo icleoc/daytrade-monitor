@@ -1,12 +1,11 @@
 import os
 import time
-from supabase import create_client, Client
+import yfinance as yf
+import pandas as pd
 from datetime import datetime
-import random  # usado para simular preço; substitua pela API real depois
+from supabase import create_client, Client
 
-# -----------------------------
-# Configurações do Supabase
-# -----------------------------
+# Configurações Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
@@ -14,24 +13,31 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     raise ValueError("❌ Configure SUPABASE_URL e SUPABASE_ANON_KEY nas variáveis de ambiente.")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+print("✅ Conectado ao Supabase com sucesso!")
 
-# -----------------------------
-# Ativos e intervalo
-# -----------------------------
-ASSETS = os.getenv("ASSETS", "XAU/USD,BTC/USD,EUR/USD,IBOV").split(",")
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 60))
+# Ativos / tickers no Yahoo Finance
+TICKERS = {
+    "XAUUSD": "GC=F",       # Ouro futuro (confirme se funciona para você)
+    "BTCUSD": "BTC-USD",
+    "EURUSD": "EURUSD=X",
+    "IBOV": "^BVSP"
+}
 
-# -----------------------------
-# Função para simular VWAP (substituir por cálculo real depois)
-# -----------------------------
-def get_vwap_simulado(asset):
-    # Simula um preço aleatório
-    return round(random.uniform(100, 200), 2)
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))  # segundos
 
-# -----------------------------
-# Função para gravar no Supabase
-# -----------------------------
-def gravar_vwap(asset, price):
+def get_latest_price(ticker):
+    """Retorna o preço de fechamento mais recente de ticker."""
+    try:
+        df = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
+        if df is None or df.empty:
+            return None
+        latest = df["Close"].iloc[-1]
+        return float(latest)
+    except Exception as e:
+        print(f"⚠️ Erro ao obter preço para {ticker}: {e}")
+        return None
+
+def gravar_preco(asset, price):
     data = {
         "ativo": asset,
         "preco": price,
@@ -39,30 +45,28 @@ def gravar_vwap(asset, price):
     }
     try:
         supabase.table("ativos").insert(data).execute()
-        print(f"💾 VWAP de {asset} gravado: {price}")
+        print(f"💾 Gravado {asset} = {price}")
     except Exception as e:
         print(f"⚠️ Erro ao gravar {asset}: {e}")
 
-# -----------------------------
-# Função principal de monitoramento
-# -----------------------------
-def monitorar_vwap():
-    print(f"⏱️ Checando VWAPs dos ativos: {', '.join(ASSETS)}")
-    for asset in ASSETS:
-        price = get_vwap_simulado(asset)
-        gravar_vwap(asset, price)
+def monitorar():
+    print(f"⏱️ Checando preços: {', '.join(TICKERS.keys())}")
+    for asset, ticker in TICKERS.items():
+        price = get_latest_price(ticker)
+        if price is not None:
+            gravar_preco(asset, price)
+        else:
+            print(f"⚠️ Sem preço válido para {asset}")
 
-# -----------------------------
-# Loop principal
-# -----------------------------
 if __name__ == "__main__":
-    print("✅ Conectado ao Supabase!")
-    print(f"🚀 Iniciando monitoramento em loop infinito a cada {POLL_INTERVAL} segundos...")
-    
+    print("🚀 Iniciando monitoramento em loop contínuo...")
     while True:
         try:
-            monitorar_vwap()
+            monitorar()
             time.sleep(POLL_INTERVAL)
+        except KeyboardInterrupt:
+            print("🛑 Monitoramento interrompido pelo usuário.")
+            break
         except Exception as e:
             print(f"⚠️ Erro no loop principal: {e}")
             time.sleep(10)
