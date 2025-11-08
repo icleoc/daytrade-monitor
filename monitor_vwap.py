@@ -29,3 +29,17 @@ if not os.getenv("SUPABASE_URL") or not anon_key:
 else:
     print("✅ Variáveis detectadas com sucesso! Tudo certo.")
 
+import time
+
+print("🚀 Iniciando monitoramento em loop infinito...")
+
+while True:
+    try:
+        # Aqui entra sua função principal de monitoramento, por exemplo:
+        monitorar_vwap()
+
+        time.sleep(int(os.getenv("POLL_INTERVAL", "60")))  # espera 60 segundos
+    except Exception as e:
+        print(f"⚠️ Erro no loop principal: {e}")
+        time.sleep(10)
+
