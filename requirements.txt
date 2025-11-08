@@ -2,6 +2,6 @@ pandas
 requests
 yfinance
 ta
-ta
 supabase
+selenium
 python-dotenv
