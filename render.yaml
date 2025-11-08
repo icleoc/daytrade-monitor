@@ -12,3 +12,5 @@ services:
         sync: false
       - key: POLL_INTERVAL
         value: "60"
+      - key: ASSETS
+        value: "XAU/USD,BTC/USD,EUR/USD,IBOV"
