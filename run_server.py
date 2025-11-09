@@ -5,6 +5,7 @@ import os
 app = Flask(__name__)
 start_background_thread()
 
+# Template HTML do dashboard
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-BR">
