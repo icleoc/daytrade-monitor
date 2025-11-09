@@ -1,101 +1,37 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VWAP Monitor (Coinbase)</title>
-  <style>
-    body { background:#081024; color:#fff; font-family: Inter, Arial, sans-serif; margin:0; padding:20px; }
-    header { text-align:center; margin-bottom:12px; }
-    h1 { margin:0; color:#00d4ff; font-weight:600; }
-    .controls { text-align:center; margin:12px 0; color:#9aa7b2; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap:18px; margin-top:18px; }
-    .card { padding:18px; border-radius:12px; box-shadow: 0 6px 18px rgba(0,0,0,0.6); background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); }
-    .buy { border-left:6px solid #10b981; }
-    .sell { border-left:6px solid #ef4444; }
-    .neutral { border-left:6px solid #64748b; }
-    .symbol { font-size:1.2rem; font-weight:700; }
-    .price { font-size:1.6rem; margin-top:6px; }
-    .meta { color:#9aa7b2; margin-top:8px; font-size:0.9rem; }
-    footer { text-align:center; color:#6b7280; margin-top:18px; font-size:0.85rem; }
-  </style>
+<meta charset="UTF-8">
+<title>VWAP Monitor</title>
+<style>
+  body { font-family: Arial; background: #111; color: #eee; }
+  h1 { text-align: center; margin: 20px; }
+  .cards { display: flex; flex-wrap: wrap; justify-content: center; }
+  .card { margin: 10px; padding: 20px; border-radius: 12px; width: 180px; text-align: center; font-weight: bold; }
+  .BUY { background: #1abc9c; color: #000; }
+  .SELL { background: #e74c3c; color: #fff; }
+  .NEUTRO { background: #f39c12; color: #000; }
+</style>
 </head>
 <body>
-  <header>
-    <h1>VWAP Monitor — Coinbase</h1>
-    <div class="controls">Atualização automática; use o selector abaixo para controlar intervalo de refresh do cliente.</div>
-    <div style="margin-top:8px;">
-      <label style="color:#9aa7b2;">Intervalo cliente: </label>
-      <select id="clientInterval">
-        <option value="30000">30s</option>
-        <option value="60000">1m</option>
-        <option value="120000" selected>2m</option>
-        <option value="300000">5m</option>
-      </select>
-    </div>
-  </header>
-
-  <main>
-    <div class="grid" id="grid"></div>
-  </main>
-
-  <footer>
-    <div id="status">Carregando...</div>
-    <div style="margin-top:6px;">Powered by Flask • Coinbase • Supabase</div>
-  </footer>
-
-  <script>
-    const grid = document.getElementById('grid');
-    const statusEl = document.getElementById('status');
-    const clientInterval = document.getElementById('clientInterval');
-
-    let refreshMs = parseInt(clientInterval.value);
-    let timer = null;
-
-    clientInterval.addEventListener('change', (e) => {
-      refreshMs = parseInt(e.target.value);
-      if (timer) clearInterval(timer);
-      timer = setInterval(load, refreshMs);
-      load();
-    });
-
-    async function load(){
-      try {
-        statusEl.innerText = 'Atualizando...';
-        const res = await fetch('/api/signals');
-        const data = await res.json();
-        grid.innerHTML = '';
-        if (!Array.isArray(data) || data.length === 0) {
-          grid.innerHTML = '<div style="color:#9aa7b2; padding:24px;">Nenhum dado disponível — aguardando atualizações do backend.</div>';
-          statusEl.innerText = 'Sem dados';
-          return;
-        }
-        data.forEach(d => {
-          const card = document.createElement('div');
-          let cls = 'neutral';
-          if (d.sinal === 'BUY') cls = 'buy';
-          if (d.sinal === 'SELL') cls = 'sell';
-          card.className = 'card ' + cls;
-          card.innerHTML = `
-            <div class="symbol">${d.nome}</div>
-            <div class="price">$${(d.preco !== null && d.preco !== undefined) ? Number(d.preco).toFixed(2) : '-'}</div>
-            <div style="margin-top:6px;">VWAP: ${(d.vwap !== null && d.vwap !== undefined) ? Number(d.vwap).toFixed(4) : '-'}</div>
-            <div class="meta">Sinal: <strong>${d.sinal || 'NEUTRAL'}</strong></div>
-            <div class="meta">Atualizado: ${d.atualizado_em ? new Date(d.atualizado_em).toLocaleString() : '-'}</div>
-          `;
-          grid.appendChild(card);
-        });
-        statusEl.innerText = `Última atualização: ${new Date().toLocaleTimeString()}`;
-      } catch (err) {
-        statusEl.innerText = 'Erro ao carregar dados';
-        grid.innerHTML = '<div style="color:#ffb4b4; padding:16px;">Erro ao carregar dados do backend.</div>';
-        console.error(err);
-      }
-    }
-
-    // start
-    timer = setInterval(load, refreshMs);
-    load();
-  </script>
+<h1>VWAP Monitor</h1>
+<div class="cards" id="cards"></div>
+<script>
+async function fetchSignals() {
+  const res = await fetch("/api/signals");
+  const data = await res.json();
+  const container = document.getElementById("cards");
+  container.innerHTML = "";
+  data.forEach(d => {
+    const card = document.createElement("div");
+    card.className = `card ${d.sinal}`;
+    card.innerHTML = `<div>${d.nome}</div><div>${d.preco || '-'} | VWAP: ${d.vwap || '-'}</div><div>${d.sinal}</div>`;
+    container.appendChild(card);
+  });
+}
+// Atualiza cards a cada 30s
+fetchSignals();
+setInterval(fetchSignals, 30000);
+</script>
 </body>
 </html>
