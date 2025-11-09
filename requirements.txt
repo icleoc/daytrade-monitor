@@ -1,6 +1,5 @@
-numpy==1.26.3
+flask==2.3.6
+requests==2.34.0
 pandas==2.1.1
-requests
-flask
-python-dotenv
-supabase
+numpy==1.27.5
+supabase==2.1.1
