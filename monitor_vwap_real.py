@@ -176,3 +176,15 @@ if __name__ == "__main__":
     thread = threading.Thread(target=fetch_and_update, daemon=True)
     thread.start()
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)
+
+# mapeamentos
+SYMBOLS_BINANCE = ["BTCUSDT", "ETHUSDT"]      # ativos spot binance
+SYMBOLS_TWELVE = ["EUR/USD", "XAU/USD"]      # forex/commodities no TwelveData
+
+# mapeamento central para dashboard (nome amigável)
+ASSETS_MAP = {
+    "BTCUSDT": {"provider": "binance", "symbol": "BTCUSDT"},
+    "ETHUSDT": {"provider": "binance", "symbol": "ETHUSDT"},
+    "EURUSD": {"provider": "twelvedata", "symbol": "EUR/USD"},
+    "XAUUSD": {"provider": "twelvedata", "symbol": "XAU/USD"},
+}
