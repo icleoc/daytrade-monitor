@@ -1,98 +1,59 @@
-import os
-import time
 import threading
+import time
+import os
 import requests
-from datetime import datetime
-from supabase import create_client, Client
 
-# Variáveis de ambiente
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE")
-SUPABASE_TABLE_SIGNALS = os.environ.get("SUPABASE_TABLE_SIGNALS")
+current_signals = {}
+
+ASSETS_COINBASE = ["BTC-USD", "ETH-USD"]
+ASSETS_TWELVEDATA = ["EUR/USD", "XAU/USD"]
+
 TWELVEDATA_API_KEY = os.environ.get("TWELVEDATA_API_KEY")
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 60))
 COINBASE_GRANULARITY = int(os.environ.get("COINBASE_GRANULARITY", 60))
-ASSETS = os.environ.get("ASSETS", "BTC-USD,ETH-USD,EUR/USD,XAU/USD").split(',')
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 10))
 
-# Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# Armazena sinais atuais
-current_signals = {asset: {"preco": None, "vwap": None, "sinal": "NEUTRO"} for asset in ASSETS}
-
-# Funções para VWAP
-def fetch_coinbase_candles(symbol, granularity):
-    url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity={granularity}"
-    headers = {"Accept": "application/json"}
+def fetch_coinbase(asset):
+    url = f"https://api.exchange.coinbase.com/products/{asset}/candles?granularity={COINBASE_GRANULARITY}"
     try:
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, timeout=5)
         r.raise_for_status()
         data = r.json()
         if not data:
-            return None
-        # Coinbase retorna [time, low, high, open, close, volume], vamos usar close
-        closes = [c[4] for c in data]
-        vwap = sum(closes) / len(closes)
-        preco = closes[-1]
-        return preco, vwap
+            return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
+        # Coinbase retorna [time, low, high, open, close, volume], pegamos preço de fechamento
+        close_prices = [c[4] for c in data]
+        preco = close_prices[-1]
+        vwap = sum([(c[1]+c[2]+c[4])/3*c[5] for c in data]) / sum([c[5] for c in data])
+        sinal = "COMPRA" if preco > vwap else "VENDA" if preco < vwap else "NEUTRO"
+        return {"preco": preco, "vwap": vwap, "sinal": sinal}
     except:
-        return None
+        return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
 
-def fetch_twelvedata_candles(symbol):
-    interval = os.environ.get("VWAP_CANDLES", "1min")
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={TWELVEDATA_API_KEY}"
+def fetch_twelvedata(asset):
+    interval = "1min"
+    symbol = asset.replace("/", "")
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={TWELVEDATA_API_KEY}&outputsize=20"
     try:
-        r = requests.get(url)
+        r = requests.get(url, timeout=5)
         r.raise_for_status()
         data = r.json()
-        values = data.get("values")
-        if not values:
-            return None
-        closes = [float(v["close"]) for v in values]
-        vwap = sum(closes) / len(closes)
-        preco = closes[0]
-        return preco, vwap
+        if "values" not in data:
+            return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
+        close_prices = [float(v["close"]) for v in data["values"]]
+        volume = [float(v["volume"]) for v in data["values"]]
+        preco = close_prices[0]
+        vwap = sum([p*v for p,v in zip(close_prices, volume)])/sum(volume) if sum(volume) > 0 else preco
+        sinal = "COMPRA" if preco > vwap else "VENDA" if preco < vwap else "NEUTRO"
+        return {"preco": preco, "vwap": vwap, "sinal": sinal}
     except:
-        return None
-
-def upsert_signal(asset, preco, vwap, sinal):
-    current_signals[asset] = {"preco": preco, "vwap": vwap, "sinal": sinal}
-    try:
-        payload = {
-            "nome": asset,
-            "preco": preco,
-            "vwap": vwap,
-            "sinal": sinal,
-            "updated_at": datetime.utcnow().isoformat()
-        }
-        supabase.table(SUPABASE_TABLE_SIGNALS).upsert(payload, on_conflict="nome").execute()
-    except:
-        pass
-
-def calculate_signal(preco, vwap):
-    if preco is None or vwap is None:
-        return "NEUTRO"
-    if preco > vwap:
-        return "VENDA"
-    elif preco < vwap:
-        return "COMPRA"
-    else:
-        return "NEUTRO"
+        return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
 
 def monitor_loop():
     while True:
-        for asset in ASSETS:
-            if "/" in asset:  # EUR/USD ou XAU/USD -> TwelveData
-                result = fetch_twelvedata_candles(asset)
-            else:  # BTC-USD, ETH-USD -> Coinbase
-                result = fetch_coinbase_candles(asset, COINBASE_GRANULARITY)
-            if result:
-                preco, vwap = result
-            else:
-                preco = vwap = None
-            sinal = calculate_signal(preco, vwap)
-            upsert_signal(asset, preco, vwap, sinal)
+        for asset in ASSETS_COINBASE:
+            current_signals[asset] = fetch_coinbase(asset)
+        for asset in ASSETS_TWELVEDATA:
+            current_signals[asset] = fetch_twelvedata(asset)
         time.sleep(POLL_INTERVAL)
 
 def start_background_thread():
