@@ -9,3 +9,9 @@ flask
 gunicorn
 python-dotenv
 python-binance
+Flask
+websocket-client
+requests
+python-dotenv
+ujson
+supabase
