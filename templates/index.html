@@ -7,11 +7,12 @@
   body { font-family: Arial; background: #111; color: #eee; }
   h1 { text-align: center; margin: 20px; }
   .cards { display: flex; flex-wrap: wrap; justify-content: center; }
-  .card { margin: 10px; padding: 20px; border-radius: 12px; width: 180px; text-align: center; font-weight: bold; transition: all 0.3s ease; }
+  .card { margin: 10px; padding: 20px; border-radius: 12px; width: 220px; text-align: center; font-weight: bold; transition: all 0.3s ease; }
   .BUY { background: #1abc9c; color: #000; }
   .SELL { background: #e74c3c; color: #fff; }
   .NEUTRO { background: #f39c12; color: #000; }
   .flash { transform: scale(1.1); box-shadow: 0 0 15px #fff; }
+  .time { font-size: 0.85em; margin-top: 5px; color: #ccc; }
 </style>
 </head>
 <body>
@@ -29,12 +30,23 @@ async function fetchSignals() {
 
   data.forEach(d => {
     const card = document.createElement("div");
-    card.className = `card ${d.sinal}`;
-    card.innerHTML = `<div>${d.nome}</div>
-                      <div>${d.preco || '-'} | VWAP: ${d.vwap || '-'}</div>
-                      <div>${d.sinal}</div>`;
+    card.className = `card ${d.sinal || 'NEUTRO'}`;
 
-    // Detecta mudança de sinal e aplica efeito visual
+    // Converte UTC para fuso local do navegador
+    let localTime = '-';
+    if(d.atualizado_em){
+      const utcTime = new Date(d.atualizado_em);
+      localTime = utcTime.toLocaleString(); // fuso do usuário
+    }
+
+    card.innerHTML = `
+      <div>${d.nome}</div>
+      <div>${d.preco || '-'} | VWAP: ${d.vwap || '-'}</div>
+      <div>${d.sinal || 'NEUTRO'}</div>
+      <div class="time">${localTime}</div>
+    `;
+
+    // Efeito de mudança de sinal
     if(previousSignals[d.nome] && previousSignals[d.nome] !== d.sinal){
       card.classList.add("flash");
       setTimeout(() => card.classList.remove("flash"), 1000);
@@ -45,7 +57,7 @@ async function fetchSignals() {
   });
 }
 
-// Atualiza cards imediatamente e depois a cada REFRESH_INTERVAL
+// Atualiza imediatamente e depois a cada 30s
 fetchSignals();
 setInterval(fetchSignals, 30000);
 </script>
