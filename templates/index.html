@@ -2,123 +2,76 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VWAP Monitor Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VWAP Monitor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             background: #f0f2f5;
-            margin: 0;
-            padding: 0;
+            padding: 20px;
         }
-        header {
-            background-color: #20232a;
-            color: #fff;
-            padding: 15px 20px;
-            text-align: center;
-        }
-        h1 {
-            margin: 0;
-            font-size: 24px;
-        }
+        h1 { text-align: center; }
         .cards-container {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            padding: 20px;
             gap: 20px;
+            justify-content: center;
+            margin-top: 20px;
         }
         .card {
-            width: 220px;
-            padding: 15px;
+            background: #fff;
             border-radius: 12px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-            transition: transform 0.2s, background-color 0.3s;
-            position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 220px;
+            text-align: center;
         }
         .card h2 {
             margin: 0 0 10px 0;
-            font-size: 20px;
-            text-align: center;
         }
-        .card p {
-            margin: 5px 0;
-            font-size: 16px;
-            text-align: center;
+        .preco { font-size: 1.5em; margin-bottom: 5px; }
+        .vwap { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+        .sinal {
+            font-weight: bold;
+            font-size: 1.1em;
+            padding: 5px 10px;
+            border-radius: 6px;
+            color: #fff;
         }
-        /* cores base para sinais */
-        .BUY { background-color: #d4edda; }
-        .SELL { background-color: #f8d7da; }
-        .NEUTRO { background-color: #fff3cd; }
-
-        /* efeito flash ao mudar sinal */
-        .flash {
-            animation: flash-bg 1s;
-        }
-        @keyframes flash-bg {
-            0% { box-shadow: 0 0 15px 5px rgba(255,255,255,0.7); }
-            50% { box-shadow: 0 0 25px 10px rgba(255,255,255,0.9); }
-            100% { box-shadow: 0 0 15px 5px rgba(255,255,255,0.7); }
-        }
+        .COMPRA { background-color: #28a745; }
+        .VENDA { background-color: #dc3545; }
+        .NEUTRO { background-color: #6c757d; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>VWAP Monitor Dashboard</h1>
-        <p>Atualizado automaticamente a cada <span id="interval">30</span> segundos</p>
-    </header>
-
-    <div class="cards-container" id="cards-container">
-        <!-- Cards serão inseridos aqui via JS -->
-    </div>
+    <h1>VWAP Monitor Day Trade</h1>
+    <div class="cards-container" id="cards"></div>
 
     <script>
-        const REFRESH_INTERVAL = 30000; // 30 segundos
-        const cardsContainer = document.getElementById("cards-container");
-        const prevSignals = {}; // Guarda sinais anteriores para efeito flash
-
         async function fetchSignals() {
             try {
-                const res = await fetch("/api/signals");
+                const res = await fetch('/api/signals');
                 const data = await res.json();
-                updateCards(data);
+                const container = document.getElementById('cards');
+                container.innerHTML = ''; // limpa cards antigos
+                for (const [asset, info] of Object.entries(data)) {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <h2>${asset}</h2>
+                        <div class="preco">Preço: ${info.preco !== null ? info.preco.toFixed(2) : '-'}</div>
+                        <div class="vwap">VWAP: ${info.vwap !== null ? info.vwap.toFixed(2) : '-'}</div>
+                        <div class="sinal ${info.sinal}">${info.sinal}</div>
+                    `;
+                    container.appendChild(card);
+                }
             } catch (err) {
-                console.error("Erro ao buscar sinais:", err);
+                console.error('Erro ao buscar sinais:', err);
             }
         }
 
-        function updateCards(data) {
-            cardsContainer.innerHTML = "";
-            const now = new Date();
-            const timezoneOffset = now.getTimezoneOffset() * 60000;
-
-            data.forEach(asset => {
-                const localTime = new Date(new Date(asset.atualizado_em).getTime() - timezoneOffset)
-                    .toLocaleString("pt-BR", { hour12: false });
-
-                const card = document.createElement("div");
-                card.className = `card ${asset.sinal}`;
-
-                // Verifica mudança de sinal para flash
-                if(prevSignals[asset.nome] && prevSignals[asset.nome] !== asset.sinal){
-                    card.classList.add("flash");
-                }
-                prevSignals[asset.nome] = asset.sinal;
-
-                card.innerHTML = `
-                    <h2>${asset.nome}</h2>
-                    <p class="price">Preço: ${asset.preco !== null ? asset.preco.toFixed(2) : "-"}</p>
-                    <p class="vwap">VWAP: ${asset.vwap !== null ? asset.vwap.toFixed(2) : "-"}</p>
-                    <p class="signal">Sinal: ${asset.sinal}</p>
-                    <p class="time">Atualizado: ${localTime}</p>
-                `;
-                cardsContainer.appendChild(card);
-            });
-        }
-
-        // Auto-refresh
+        // Atualiza a cada 10 segundos
         fetchSignals();
-        setInterval(fetchSignals, REFRESH_INTERVAL);
+        setInterval(fetchSignals, 10000);
     </script>
 </body>
 </html>
