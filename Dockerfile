@@ -1,19 +1,32 @@
-# Use Python 3.12 slim como base
+# Python 3.12.17 slim (garante compatibilidade)
 FROM python:3.12.17-slim
 
-# Diretório de trabalho
 WORKDIR /app
 
-# Copia e instala dependências
+# Evita compilação de dependências problemáticas
+ENV PIP_NO_CACHE_DIR=1
+ENV PYTHONUNBUFFERED=1
+
+# Instala dependências do sistema para pandas/numpy
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia requirements
 COPY requirements.txt .
+
+# Atualiza pip e instala pacotes
 RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install -r requirements.txt
 
 # Copia o restante do projeto
 COPY . .
 
-# Expõe porta do Flask
+# Expõe porta
 EXPOSE 5000
 
-# Comando padrão para iniciar a aplicação
+# Comando para iniciar
 CMD ["python", "run_server.py"]
