@@ -1,49 +1,45 @@
 import os
 import time
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import pandas as pd
 from flask import Flask, render_template_string
 from supabase import create_client, Client
 from binance.client import Client as BinanceClient
 
-# ==============================
+# =========================================
 # CONFIGURAÇÕES GERAIS
-# ==============================
-REFRESH_SECONDS = 30  # <-- altere aqui o intervalo de atualização do dashboard
+# =========================================
+REFRESH_SECONDS = 30  # Tempo em segundos para o refresh automático no dashboard
 
-# Config Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Config Binance
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
 binance_client = BinanceClient(BINANCE_API_KEY, BINANCE_API_SECRET)
 
-# Ativos monitorados
 ASSETS = ["BTCUSDT", "ETHUSDT", "XAUUSDT", "EURUSDT"]
 
-# Flask app
 app = Flask(__name__)
 
-# ==============================
+
+# =========================================
 # FUNÇÃO VWAP
-# ==============================
+# =========================================
 def calculate_vwap(df):
     if df.empty:
         return None
     df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
     df["tp_vol"] = df["typical_price"] * df["volume"]
-    vwap = df["tp_vol"].sum() / df["volume"].sum()
-    return vwap
+    return df["tp_vol"].sum() / df["volume"].sum()
 
 
-# ==============================
-# FUNÇÃO PARA OBTER DADOS E CALCULAR SINAL
-# ==============================
+# =========================================
+# ATUALIZAÇÃO DOS DADOS NO SUPABASE
+# =========================================
 def fetch_and_update():
     while True:
         for symbol in ASSETS:
@@ -57,7 +53,8 @@ def fetch_and_update():
                         "taker_quote_vol", "ignore"
                     ],
                 )
-                df = df.astype(float)
+                df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+
                 vwap = calculate_vwap(df)
                 last_close = df["close"].iloc[-1]
 
@@ -79,14 +76,14 @@ def fetch_and_update():
                 print(f"[{datetime.now()}] {symbol} atualizado -> {signal} (Preço: {last_close}, VWAP: {vwap})")
 
             except Exception as e:
-                print(f"Erro ao atualizar {symbol}: {e}")
+                print(f"⚠️ Erro ao atualizar {symbol}: {e}")
 
         time.sleep(REFRESH_SECONDS)
 
 
-# ==============================
+# =========================================
 # DASHBOARD HTML
-# ==============================
+# =========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -96,14 +93,12 @@ HTML_TEMPLATE = """
     <title>VWAP Monitor</title>
     <style>
         body {
-            background-color: #111;
-            color: white;
+            background-color: #0d1117;
+            color: #fff;
             font-family: Arial, sans-serif;
             text-align: center;
         }
-        h1 {
-            margin-top: 20px;
-        }
+        h1 { margin-top: 20px; }
         .cards {
             display: flex;
             justify-content: center;
@@ -111,14 +106,15 @@ HTML_TEMPLATE = """
             margin-top: 40px;
         }
         .card {
-            width: 220px;
-            margin: 10px;
+            width: 240px;
+            margin: 12px;
             padding: 20px;
             border-radius: 16px;
-            color: #fff;
             font-weight: bold;
-            box-shadow: 0 0 10px rgba(255,255,255,0.1);
+            box-shadow: 0 0 12px rgba(255,255,255,0.1);
+            transition: transform 0.2s ease;
         }
+        .card:hover { transform: scale(1.03); }
         .buy { background-color: #1ea14b; }
         .sell { background-color: #d93d3d; }
         .neutral { background-color: #444; }
@@ -137,39 +133,46 @@ HTML_TEMPLATE = """
 <body>
     <h1>📊 VWAP Monitor — Atualização a cada {{ refresh_time }}s</h1>
     <div class="cards">
-        {% for ativo in ativos %}
-        <div class="card {% if ativo.sinal == 'BUY' %}buy{% elif ativo.sinal == 'SELL' %}sell{% else %}neutral{% endif %}">
-            <h2>{{ ativo.nome }}</h2>
-            <p>Preço: {{ ativo.preco }}</p>
-            <p>VWAP: {{ ativo.vwap }}</p>
-            <p>Sinal: {{ ativo.sinal }}</p>
-            <p><small>Atualizado: {{ ativo.atualizado_em }}</small></p>
-        </div>
-        {% endfor %}
+        {% if ativos and ativos|length > 0 %}
+            {% for ativo in ativos %}
+            <div class="card {% if ativo.sinal == 'BUY' %}buy{% elif ativo.sinal == 'SELL' %}sell{% else %}neutral{% endif %}">
+                <h2>{{ ativo.nome }}</h2>
+                <p>💰 Preço: {{ ativo.preco }}</p>
+                <p>📈 VWAP: {{ ativo.vwap }}</p>
+                <p>📊 Sinal: {{ ativo.sinal }}</p>
+                <p><small>⏱ Atualizado: {{ ativo.atualizado_em[:19].replace('T',' ') }}</small></p>
+            </div>
+            {% endfor %}
+        {% else %}
+            <h3>Nenhum dado disponível ainda...</h3>
+        {% endif %}
     </div>
     <div class="footer">Powered by Flask + Binance + Supabase</div>
 </body>
 </html>
 """
 
-# ==============================
+
+# =========================================
 # ROTA PRINCIPAL
-# ==============================
+# =========================================
 @app.route("/")
 def index():
     try:
-        data = supabase.table("ativos").select("*").execute().data
+        response = supabase.table("ativos").select("*").execute()
+        data = response.data or []
         data = sorted(data, key=lambda x: x["nome"])
     except Exception as e:
-        data = []
         print(f"Erro ao carregar dashboard: {e}")
+        data = []
     return render_template_string(HTML_TEMPLATE, ativos=data, refresh_time=REFRESH_SECONDS)
 
 
-# ==============================
-# THREAD E INICIALIZAÇÃO
-# ==============================
+# =========================================
+# THREAD PRINCIPAL
+# =========================================
 if __name__ == "__main__":
+    print("🚀 Iniciando VWAP Monitor em tempo real...")
     thread = threading.Thread(target=fetch_and_update, daemon=True)
     thread.start()
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)
