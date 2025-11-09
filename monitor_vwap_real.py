@@ -39,7 +39,7 @@ def fetch_twelvedata_candles(symbol):
     params = {
         "symbol": symbol,
         "interval": TWELVEDATA_INTERVAL,
-        "apikey": "<sua-twelvedata-key>",
+        "apikey": "<34b1f0bac586484c97725bbbbddad099>",
         "outputsize": 500
     }
     try:
