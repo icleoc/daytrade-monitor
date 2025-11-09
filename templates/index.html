@@ -7,29 +7,45 @@
   body { font-family: Arial; background: #111; color: #eee; }
   h1 { text-align: center; margin: 20px; }
   .cards { display: flex; flex-wrap: wrap; justify-content: center; }
-  .card { margin: 10px; padding: 20px; border-radius: 12px; width: 180px; text-align: center; font-weight: bold; }
+  .card { margin: 10px; padding: 20px; border-radius: 12px; width: 180px; text-align: center; font-weight: bold; transition: all 0.3s ease; }
   .BUY { background: #1abc9c; color: #000; }
   .SELL { background: #e74c3c; color: #fff; }
   .NEUTRO { background: #f39c12; color: #000; }
+  .flash { transform: scale(1.1); box-shadow: 0 0 15px #fff; }
 </style>
 </head>
 <body>
 <h1>VWAP Monitor</h1>
 <div class="cards" id="cards"></div>
+
 <script>
+let previousSignals = {};
+
 async function fetchSignals() {
   const res = await fetch("/api/signals");
   const data = await res.json();
   const container = document.getElementById("cards");
   container.innerHTML = "";
+
   data.forEach(d => {
     const card = document.createElement("div");
     card.className = `card ${d.sinal}`;
-    card.innerHTML = `<div>${d.nome}</div><div>${d.preco || '-'} | VWAP: ${d.vwap || '-'}</div><div>${d.sinal}</div>`;
+    card.innerHTML = `<div>${d.nome}</div>
+                      <div>${d.preco || '-'} | VWAP: ${d.vwap || '-'}</div>
+                      <div>${d.sinal}</div>`;
+
+    // Detecta mudança de sinal e aplica efeito visual
+    if(previousSignals[d.nome] && previousSignals[d.nome] !== d.sinal){
+      card.classList.add("flash");
+      setTimeout(() => card.classList.remove("flash"), 1000);
+    }
+
+    previousSignals[d.nome] = d.sinal;
     container.appendChild(card);
   });
 }
-// Atualiza cards a cada 30s
+
+// Atualiza cards imediatamente e depois a cada REFRESH_INTERVAL
 fetchSignals();
 setInterval(fetchSignals, 30000);
 </script>
