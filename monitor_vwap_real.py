@@ -41,6 +41,13 @@ def coinbase_get_candles(symbol, granularity=120):
     df = df.sort_values("time").reset_index(drop=True)
     return df
 
+def coinbase_get_price(symbol):
+    url = f"https://api.coinbase.com/v2/prices/{symbol}/spot"
+    r = requests.get(url, timeout=5)
+    r.raise_for_status()
+    data = r.json()
+    return float(data["data"]["amount"])
+
 def twelvedata_get_candles(symbol, interval="2min", outputsize=50):
     url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={TWELVEDATA_KEY}"
     r = requests.get(url, timeout=10)
@@ -57,6 +64,13 @@ def twelvedata_get_candles(symbol, interval="2min", outputsize=50):
     df["volume"] = df["volume"].astype(float)
     df = df.sort_values("time").reset_index(drop=True)
     return df
+
+def twelvedata_get_price(symbol):
+    url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={TWELVEDATA_KEY}"
+    r = requests.get(url, timeout=5)
+    r.raise_for_status()
+    data = r.json()
+    return float(data["price"])
 
 def compute_vwap(df):
     if df.empty:
@@ -85,24 +99,26 @@ def upsert_supabase(symbol, price, vwap, signal):
 # Loop principal
 # ---------------------
 def start_bot():
-    print(f"Iniciando VWAP Monitor. Intervalo {REFRESH_INTERVAL}s")
+    print(f"Iniciando VWAP Monitor em tempo real. Intervalo {REFRESH_INTERVAL}s")
     while True:
+        # Coinbase
         for symbol in COINBASE_ASSETS:
             try:
                 df = coinbase_get_candles(symbol)
                 vwap = compute_vwap(df)
-                last_price = df["close"].iloc[-1]
+                last_price = coinbase_get_price(symbol)
                 signal = "BUY" if last_price > vwap else "SELL"
                 upsert_supabase(symbol, last_price, vwap, signal)
                 print(f"{symbol} -> {signal} | price={last_price} vwap={vwap}")
             except Exception as e:
                 print(f"Erro Coinbase {symbol}: {e}")
 
+        # TwelveData
         for symbol in TWELVEDATA_ASSETS:
             try:
                 df = twelvedata_get_candles(symbol)
                 vwap = compute_vwap(df)
-                last_price = df["close"].iloc[-1]
+                last_price = twelvedata_get_price(symbol)
                 signal = "BUY" if last_price > vwap else "SELL"
                 upsert_supabase(symbol, last_price, vwap, signal)
                 print(f"{symbol} -> {signal} | price={last_price} vwap={vwap}")
