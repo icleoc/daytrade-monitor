@@ -32,7 +32,7 @@ def gerar_dados_ativo(ativo):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('dashboard.html')
 
 @app.route('/dados')
 def dados():
