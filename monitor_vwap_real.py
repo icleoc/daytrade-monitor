@@ -1,190 +1,96 @@
 import os
 import time
-import threading
+import requests
+import pandas as pd
+from flask import Flask, render_template, jsonify
+from supabase import create_client, Client
 from datetime import datetime, timezone
 
-import pandas as pd
-from flask import Flask, render_template_string
-from supabase import create_client, Client
-from binance.client import Client as BinanceClient
-
-# =========================================
-# CONFIGURAÇÕES GERAIS
-# =========================================
-REFRESH_SECONDS = 30  # Tempo em segundos para o refresh automático no dashboard
-
+# --- Configurações ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
-BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
-binance_client = BinanceClient(BINANCE_API_KEY, BINANCE_API_SECRET)
+# Ativos a monitorar (Coinbase usa hífen)
+ASSETS = ["BTC-USD", "ETH-USD", "XAU-USD", "EUR-USD"]
+REFRESH_INTERVAL = 120  # segundos (2 min timeframe)
 
-ASSETS = ["BTCUSDT", "ETHUSDT", "XAUUSDT", "EURUSDT"]
-
+# Flask app
 app = Flask(__name__)
 
+# --- Funções principais ---
 
-# =========================================
-# FUNÇÃO VWAP
-# =========================================
-def calculate_vwap(df):
-    if df.empty:
+def get_coinbase_data(symbol):
+    """Obtém candles de 2 minutos da Coinbase"""
+    try:
+        url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity=120"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        # Coinbase retorna [time, low, high, open, close, volume]
+        df = pd.DataFrame(data, columns=["time", "low", "high", "open", "close", "volume"])
+        df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+        df.sort_values("time", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+
+        # cálculo VWAP
+        df["tp"] = (df["high"] + df["low"] + df["close"]) / 3
+        vwap = (df["tp"] * df["volume"]).sum() / df["volume"].sum()
+
+        last_close = df.iloc[-1]["close"]
+        sinal = "BUY" if last_close > vwap else "SELL"
+
+        return {
+            "symbol": symbol,
+            "price": round(float(last_close), 2),
+            "vwap": round(float(vwap), 2),
+            "sinal": sinal
+        }
+
+    except Exception as e:
+        print(f"Erro ao obter dados {symbol}: {e}")
         return None
-    df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
-    df["tp_vol"] = df["typical_price"] * df["volume"]
-    return df["tp_vol"].sum() / df["volume"].sum()
 
 
-# =========================================
-# ATUALIZAÇÃO DOS DADOS NO SUPABASE
-# =========================================
-def fetch_and_update():
+def update_supabase_record(data):
+    """Atualiza ou insere o ativo no Supabase"""
+    try:
+        supabase.table("ativos").upsert({
+            "nome": data["symbol"],
+            "preco": data["price"],
+            "vwap": data["vwap"],
+            "sinal": data["sinal"],
+            "atualizado_em": datetime.now(timezone.utc).isoformat()
+        }).execute()
+    except Exception as e:
+        print(f"Erro Supabase {data['symbol']}: {e}")
+
+
+def start_all():
+    """Loop principal do bot"""
+    print("🚀 VWAP Monitor iniciado (Coinbase + Supabase)...")
     while True:
-        for symbol in ASSETS:
-            try:
-                klines = binance_client.get_klines(symbol=symbol, interval="2m", limit=50)
-                df = pd.DataFrame(
-                    klines,
-                    columns=[
-                        "time_open", "open", "high", "low", "close", "volume",
-                        "time_close", "qav", "num_trades", "taker_base_vol",
-                        "taker_quote_vol", "ignore"
-                    ],
-                )
-                df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
-
-                vwap = calculate_vwap(df)
-                last_close = df["close"].iloc[-1]
-
-                if last_close > vwap:
-                    signal = "BUY"
-                elif last_close < vwap:
-                    signal = "SELL"
-                else:
-                    signal = "NEUTRO"
-
-                supabase.table("ativos").upsert({
-                    "nome": symbol,
-                    "preco": round(last_close, 4),
-                    "vwap": round(vwap, 4),
-                    "sinal": signal,
-                    "atualizado_em": datetime.now(timezone.utc).isoformat()
-                }).execute()
-
-                print(f"[{datetime.now()}] {symbol} atualizado -> {signal} (Preço: {last_close}, VWAP: {vwap})")
-
-            except Exception as e:
-                print(f"⚠️ Erro ao atualizar {symbol}: {e}")
-
-        time.sleep(REFRESH_SECONDS)
+        for asset in ASSETS:
+            info = get_coinbase_data(asset)
+            if info:
+                update_supabase_record(info)
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] {asset} => {info['sinal']} | Preço: {info['price']} | VWAP: {info['vwap']}")
+        time.sleep(REFRESH_INTERVAL)
 
 
-# =========================================
-# DASHBOARD HTML
-# =========================================
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VWAP Monitor</title>
-    <style>
-        body {
-            background-color: #0d1117;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            text-align: center;
-        }
-        h1 { margin-top: 20px; }
-        .cards {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 40px;
-        }
-        .card {
-            width: 240px;
-            margin: 12px;
-            padding: 20px;
-            border-radius: 16px;
-            font-weight: bold;
-            box-shadow: 0 0 12px rgba(255,255,255,0.1);
-            transition: transform 0.2s ease;
-        }
-        .card:hover { transform: scale(1.03); }
-        .buy { background-color: #1ea14b; }
-        .sell { background-color: #d93d3d; }
-        .neutral { background-color: #444; }
-        .footer {
-            margin-top: 40px;
-            font-size: 14px;
-            color: #aaa;
-        }
-    </style>
-    <script>
-        setTimeout(() => {
-            location.reload();
-        }, {{ refresh_time }} * 1000);
-    </script>
-</head>
-<body>
-    <h1>📊 VWAP Monitor — Atualização a cada {{ refresh_time }}s</h1>
-    <div class="cards">
-        {% if ativos and ativos|length > 0 %}
-            {% for ativo in ativos %}
-            <div class="card {% if ativo.sinal == 'BUY' %}buy{% elif ativo.sinal == 'SELL' %}sell{% else %}neutral{% endif %}">
-                <h2>{{ ativo.nome }}</h2>
-                <p>💰 Preço: {{ ativo.preco }}</p>
-                <p>📈 VWAP: {{ ativo.vwap }}</p>
-                <p>📊 Sinal: {{ ativo.sinal }}</p>
-                <p><small>⏱ Atualizado: {{ ativo.atualizado_em[:19].replace('T',' ') }}</small></p>
-            </div>
-            {% endfor %}
-        {% else %}
-            <h3>Nenhum dado disponível ainda...</h3>
-        {% endif %}
-    </div>
-    <div class="footer">Powered by Flask + Binance + Supabase</div>
-</body>
-</html>
-"""
+# --- Flask rotas ---
 
-
-# =========================================
-# ROTA PRINCIPAL
-# =========================================
 @app.route("/")
 def index():
+    return render_template("index.html")
+
+
+@app.route("/api/signals")
+def api_signals():
+    """Retorna dados atuais dos ativos"""
     try:
-        response = supabase.table("ativos").select("*").execute()
-        data = response.data or []
-        data = sorted(data, key=lambda x: x["nome"])
+        data = supabase.table("ativos").select("*").execute().data
+        return jsonify(data)
     except Exception as e:
-        print(f"Erro ao carregar dashboard: {e}")
-        data = []
-    return render_template_string(HTML_TEMPLATE, ativos=data, refresh_time=REFRESH_SECONDS)
-
-
-# =========================================
-# THREAD PRINCIPAL
-# =========================================
-if __name__ == "__main__":
-    print("🚀 Iniciando VWAP Monitor em tempo real...")
-    thread = threading.Thread(target=fetch_and_update, daemon=True)
-    thread.start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)
-
-# mapeamentos
-SYMBOLS_BINANCE = ["BTCUSDT", "ETHUSDT"]      # ativos spot binance
-SYMBOLS_TWELVE = ["EUR/USD", "XAU/USD"]      # forex/commodities no TwelveData
-
-# mapeamento central para dashboard (nome amigável)
-ASSETS_MAP = {
-    "BTCUSDT": {"provider": "binance", "symbol": "BTCUSDT"},
-    "ETHUSDT": {"provider": "binance", "symbol": "ETHUSDT"},
-    "EURUSD": {"provider": "twelvedata", "symbol": "EUR/USD"},
-    "XAUUSD": {"provider": "twelvedata", "symbol": "XAU/USD"},
-}
+        return jsonify({"error": str(e)}), 500
