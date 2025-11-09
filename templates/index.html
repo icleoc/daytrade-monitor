@@ -1,59 +1,68 @@
-<!doctype html>
-<html lang="pt-br">
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="30">
+  <meta charset="UTF-8">
+  <title>VWAP Monitor em Tempo Real</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Painel VWAP - Sinais</title>
   <style>
-    body { background:#071028; color:#e6eef6; font-family: Inter, system-ui, sans-serif; padding:20px; }
-    h1 { color:#7dd3fc; text-align:center; margin-bottom:12px; }
-    .grid { display:grid; gap:18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); max-width:1100px; margin:0 auto; }
-    .card { border-radius:12px; padding:18px; box-shadow: 0 8px 30px rgba(2,6,23,0.7); text-align:center; }
-    .card h2 { margin:0 0 8px 0; font-size:18px; }
-    .msg { font-weight:700; font-size:16px; margin-bottom:8px; }
-    .meta { font-size:13px; color:#cbd5e1; }
-    .buy { background: linear-gradient(135deg,#16a34a,#65e8a6); color:#02140a; }
-    .sell { background: linear-gradient(135deg,#ef4444,#ff8a8a); color:#2b0b0b; }
-    .neutral { background: linear-gradient(135deg,#475569,#94a3b8); color:#f8fafc; }
-    .small { font-size:12px; opacity:0.95; }
+    body { font-family: Arial, sans-serif; background-color: #111; color: #fff; text-align: center; }
+    h1 { color: #00c3ff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; padding: 20px; }
+    .card {
+      border-radius: 12px; padding: 20px; color: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      transition: transform 0.2s ease;
+    }
+    .card:hover { transform: scale(1.03); }
+    .buy { background-color: #16a34a; }
+    .sell { background-color: #dc2626; }
+    .timestamp { font-size: 0.9em; color: #ccc; margin-top: 10px; }
+    .refresh { margin: 10px; }
   </style>
 </head>
 <body>
-  <h1>📊 VWAP Signals — Atualização a cada 30s</h1>
-  <div class="grid">
-    {% for s in sinais %}
-      {% set cls = 'neutral' %}
-      {% if s['sinal'] == 'COMPRA' %}{% set cls = 'buy' %}{% endif %}
-      {% if s['sinal'] == 'VENDA' %}{% set cls = 'sell' %}{% endif %}
-      <div class="card {{ cls }}">
-        <h2>{{ s['ativo'] }} <span class="small">({{ s['fonte'] }})</span></h2>
-        <div class="msg">
-          {% if s['sinal'] == 'COMPRA' %}
-            🟢 COMPRAR AGORA
-          {% elif s['sinal'] == 'VENDA' %}
-            🔴 VENDER AGORA
-          {% else %}
-            ⚪ AGUARDAR
-          {% endif %}
-        </div>
-        <div class="meta">
-          Preço: <strong>{{ "%.6f"|format(s['preco']|float) }}</strong><br/>
-          VWAP: <strong>{{ "%.6f"|format(s['vwap']|float) }}</strong><br/>
-          Confiança: <strong>{{ s['probabilidade'] }}%</strong><br/>
-          Horário (local): <span class="hora-local" data-utc="{{ s['timestamp'] }}"></span>
-        </div>
-      </div>
-    {% endfor %}
+  <h1>VWAP Monitor em Tempo Real</h1>
+  <div class="refresh">
+    <label>Atualizar a cada: </label>
+    <select id="intervalSelect">
+      <option value="30">30s</option>
+      <option value="60">1m</option>
+      <option value="120" selected>2m</option>
+    </select>
   </div>
+  <div class="grid" id="cards"></div>
 
   <script>
-    document.querySelectorAll('.hora-local').forEach(el=>{
-      const utc = el.dataset.utc;
-      if (!utc) { el.textContent = ''; return; }
-      const d = new Date(utc);
-      el.textContent = d.toLocaleString([], { hour: '2-digit', minute:'2-digit', second:'2-digit', day:'2-digit', month:'2-digit', year:'numeric' });
+    let refreshInterval = 120 * 1000;
+    const select = document.getElementById("intervalSelect");
+    select.addEventListener("change", () => {
+      refreshInterval = parseInt(select.value) * 1000;
+      clearInterval(autoRefresh);
+      autoRefresh = setInterval(loadData, refreshInterval);
+      loadData();
     });
+
+    async function loadData() {
+      const res = await fetch("/api/signals");
+      const data = await res.json();
+      const grid = document.getElementById("cards");
+      grid.innerHTML = "";
+      data.forEach(d => {
+        const card = document.createElement("div");
+        card.className = "card " + (d.sinal === "BUY" ? "buy" : "sell");
+        card.innerHTML = `
+          <h2>${d.nome}</h2>
+          <p>Preço: $${d.preco}</p>
+          <p>VWAP: $${d.vwap}</p>
+          <p><strong>Sinal: ${d.sinal}</strong></p>
+          <div class="timestamp">${new Date(d.atualizado_em).toLocaleString()}</div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    let autoRefresh = setInterval(loadData, refreshInterval);
+    loadData();
   </script>
 </body>
 </html>
