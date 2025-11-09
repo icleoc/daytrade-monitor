@@ -43,3 +43,15 @@ if __name__ == "__main__":
     t.start()
     port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
+# run_server.py
+from monitor_vwap_real import start_all, app
+import threading
+
+if __name__ == "__main__":
+    # start bot thread
+    t = threading.Thread(target=start_all, daemon=True)
+    t.start()
+    # run Flask app (local dev)
+    app.run(host="0.0.0.0", port=int(__import__('os').environ.get("PORT", 5000)))
+
