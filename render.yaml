@@ -1,16 +1,12 @@
 services:
   - type: web
-    name: vwap-monitor
+    name: daytrade-monitor
     env: python
-    plan: free
+    pythonVersion: "3.12.17"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python run_server.py"
     envVars:
-      - key: SUPABASE_URL
-        value: https://czzwmetwlfmotegsiqfl.supabase.co
-      - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6endtZXR3bGZtb3RlZ3NpcWZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0ODY1NTMsImV4cCI6MjA3ODA2MjU1M30.sbeTuE8n2QdpkCyutXjpYipjAQaadrEcOESiOI6Yjgs
-      - key: POLL_INTERVAL
-        value: "60"
-      - key: ASSETS
-        value: "XAU/USD,BTC/USD,EUR/USD,IBOV"
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: "10000"
