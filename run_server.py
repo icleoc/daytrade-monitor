@@ -1,14 +1,9 @@
-from flask import Flask, jsonify, render_template
-from monitor_vwap_real import start_bot
-from supabase import create_client
-import os
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+from flask import Flask, render_template, jsonify
+from monitor_vwap_real import start_background_thread, supabase
 
 app = Flask(__name__)
-start_bot()  # Inicializa o monitor em background
+
+start_background_thread()
 
 @app.route("/")
 def index():
@@ -16,8 +11,8 @@ def index():
 
 @app.route("/api/signals")
 def api_signals():
-    result = supabase.table("ativos").select("*").execute()
-    return jsonify(result.data)
+    data = supabase.table("ativos").select("*").execute().data
+    return jsonify(data)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(host="0.0.0.0", port=5000)
