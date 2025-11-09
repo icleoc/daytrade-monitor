@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>VWAP Monitor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>VWAP Monitor Day Trade</h1>
+    <div id="cards-container"></div>
+
+    <script>
+        async function fetchSignals() {
+            const response = await fetch("/api/signals");
+            const data = await response.json();
+            const container = document.getElementById("cards-container");
+            container.innerHTML = "";
+            for (const [asset, info] of Object.entries(data)) {
+                const card = document.createElement("div");
+                card.className = "card";
+                card.innerHTML = `
+                    <h2>${asset}</h2>
+                    <p>Preço: ${info.preco ?? "-"}</p>
+                    <p>VWAP: ${info.vwap ?? "-"}</p>
+                    <p>Sinal: ${info.sinal}</p>
+                `;
+                container.appendChild(card);
+            }
+        }
+
+        fetchSignals();
+        setInterval(fetchSignals, 5000);
+    </script>
+</body>
+</html>
