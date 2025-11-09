@@ -2,8 +2,8 @@ flask==3.0.3
 python-dotenv==1.0.1
 requests==2.32.3
 supabase==2.5.0
-python-binance==1.0.15
 pandas==2.2.3
 websocket-client==1.8.0
 ujson==5.10.0
 psycopg2-binary==2.9.7
+gunicorn==23.0.0
