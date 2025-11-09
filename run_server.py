@@ -1,10 +1,10 @@
-from flask import Flask, render_template_string
-from monitor_vwap_real import start_background_thread
+from flask import Flask, render_template_string, jsonify
+from monitor_vwap_real import start_background_thread, current_signals
+import os
 
 app = Flask(__name__)
 start_background_thread()
 
-# HTML do dashboard
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -52,9 +52,8 @@ HTML_TEMPLATE = """
             }
         }
 
-        // Atualiza a cada 10 segundos
         fetchSignals();
-        setInterval(fetchSignals, 10000);
+        setInterval(fetchSignals, parseInt("{{ refresh_interval }}") * 1000);
     </script>
 </body>
 </html>
@@ -62,7 +61,13 @@ HTML_TEMPLATE = """
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    refresh_interval = os.environ.get("REFRESH_INTERVAL", 10)
+    return render_template_string(HTML_TEMPLATE, refresh_interval=refresh_interval)
+
+@app.route("/api/signals")
+def api_signals():
+    return jsonify(current_signals)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    PORT = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=PORT)
