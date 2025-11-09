@@ -1,35 +1,74 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>VWAP Monitor</title>
-    <link rel="stylesheet" href="/static/styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor VWAP</title>
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #38bdf8;
+    }
+    .cards {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 30px;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      width: 200px;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+    }
+    .value {
+      font-size: 2em;
+      color: #38bdf8;
+    }
+  </style>
 </head>
 <body>
-    <h1>VWAP Monitor Day Trade</h1>
-    <div id="cards-container"></div>
+  <h1>📊 Monitor VWAP</h1>
+  <div class="cards">
+    <div class="card">
+      <h2>VWAP</h2>
+      <div class="value" id="vwap-value">--</div>
+    </div>
+    <div class="card">
+      <h2>RSI</h2>
+      <div class="value" id="rsi-value">--</div>
+    </div>
+    <div class="card">
+      <h2>MACD</h2>
+      <div class="value" id="macd-value">--</div>
+    </div>
+  </div>
 
-    <script>
-        async function fetchSignals() {
-            const response = await fetch("/api/signals");
-            const data = await response.json();
-            const container = document.getElementById("cards-container");
-            container.innerHTML = "";
-            for (const [asset, info] of Object.entries(data)) {
-                const card = document.createElement("div");
-                card.className = "card";
-                card.innerHTML = `
-                    <h2>${asset}</h2>
-                    <p>Preço: ${info.preco ?? "-"}</p>
-                    <p>VWAP: ${info.vwap ?? "-"}</p>
-                    <p>Sinal: ${info.sinal}</p>
-                `;
-                container.appendChild(card);
-            }
-        }
+  <script>
+    async function fetchData() {
+      try {
+        const vwap = await fetch('/vwap').then(res => res.json());
+        const rsi = await fetch('/rsi').then(res => res.json());
+        const macd = await fetch('/macd').then(res => res.json());
 
-        fetchSignals();
-        setInterval(fetchSignals, 5000);
-    </script>
+        document.getElementById('vwap-value').textContent = vwap.vwap.toFixed(4);
+        document.getElementById('rsi-value').textContent = rsi.rsi.toFixed(2);
+        document.getElementById('macd-value').textContent = macd.macd.toFixed(3);
+      } catch (err) {
+        console.error('Erro ao buscar dados:', err);
+      }
+    }
+
+    fetchData();
+    setInterval(fetchData, 5000); // atualiza a cada 5 segundos
+  </script>
 </body>
 </html>
