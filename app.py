@@ -6,7 +6,6 @@ import numpy as np
 
 app = Flask(__name__)
 
-# Configuração do Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -15,7 +14,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def index():
     return jsonify({"status": "ok", "message": "Sistema funcionando em Python 3.13.4"})
 
-# Exemplo de rota que usa pandas
 @app.route("/data", methods=["POST"])
 def process_data():
     data = request.json
