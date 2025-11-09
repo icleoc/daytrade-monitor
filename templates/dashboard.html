@@ -16,7 +16,7 @@
     .buy { background: linear-gradient(135deg,#16a34a,#65e8a6); color:#02140a; }
     .sell { background: linear-gradient(135deg,#ef4444,#ff8a8a); color:#2b0b0b; }
     .neutral { background: linear-gradient(135deg,#475569,#94a3b8); color:#f8fafc; }
-    .small { font-size:12px; opacity:0.9; }
+    .small { font-size:12px; opacity:0.95; }
   </style>
 </head>
 <body>
@@ -38,8 +38,8 @@
           {% endif %}
         </div>
         <div class="meta">
-          Preço: <strong>{{ s['preco'] }}</strong><br/>
-          VWAP: <strong>{{ s['vwap'] }}</strong><br/>
+          Preço: <strong>{{ "%.6f"|format(s['preco']|float) }}</strong><br/>
+          VWAP: <strong>{{ "%.6f"|format(s['vwap']|float) }}</strong><br/>
           Confiança: <strong>{{ s['probabilidade'] }}%</strong><br/>
           Horário (local): <span class="hora-local" data-utc="{{ s['timestamp'] }}"></span>
         </div>
@@ -48,7 +48,6 @@
   </div>
 
   <script>
-    // Converte UTC timestamp ISO para horário local do navegador
     document.querySelectorAll('.hora-local').forEach(el=>{
       const utc = el.dataset.utc;
       if (!utc) { el.textContent = ''; return; }
