@@ -1,11 +1,10 @@
 # run_server.py
-import threading
-from monitor_vwap_real import start_all, app
+from monitor_vwap_real import app, start_bot
+from threading import Thread
 
+# Inicia o bot em background
+Thread(target=start_bot, daemon=True).start()
+
+# Executa o Flask
 if __name__ == "__main__":
-    # inicia o bot em thread paralela (daemon)
-    t = threading.Thread(target=start_all, daemon=True)
-    t.start()
-
-    # inicia Flask (Gunicorn usará este app quando executar Procfile)
-    app.run(host="0.0.0.0", port=int(__import__('os').environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=5000)
