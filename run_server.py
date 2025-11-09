@@ -12,7 +12,7 @@ def api_signals():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "<h2>VWAP Monitor está rodando!</h2><p>Acesse /api/signals para ver os sinais em tempo real.</p>"
+    return "<h2>VWAP Monitor Day Trade rodando!</h2><p>Acesse /api/signals para ver sinais em tempo real.</p>"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
