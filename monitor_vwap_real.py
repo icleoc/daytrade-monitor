@@ -1,84 +1,143 @@
-import threading
 import time
+import threading
 import requests
-from datetime import datetime
+import pandas as pd
+from datetime import datetime, timezone
+from flask import Flask, jsonify
+from supabase import create_client, Client
 
-# Ativos que vamos monitorar
-ASSETS = ["BTC-USD", "ETH-USD", "EUR/USD", "XAU/USD"]
+# ===================== CONFIGURAÇÕES =====================
+SUPABASE_URL = "COLE_AQUI_SEU_SUPABASE_URL"
+SUPABASE_KEY = "COLE_AQUI_SEU_SUPABASE_KEY"
+TWELVEDATA_KEY = "COLE_AQUI_SUA_TWELVEDATA_KEY"
 
-# Cache em memória para sinais
-cache_sinais = {asset: {"sinal": "NEUTRO", "preco": None, "vwap": None} for asset in ASSETS}
+ASSETS_COINBASE = ["BTC-USD", "ETH-USD"]
+ASSETS_TWELVE = ["EUR/USD", "XAU/USD"]
 
-# Função de cálculo VWAP
-def calcular_vwap(candles):
-    if not candles:
-        return None
-    total_volume = sum(c[5] for c in candles)
-    if total_volume == 0:
-        return None
-    vwap = sum(c[4]*c[5] for c in candles)/total_volume
-    return vwap
+INTERVAL_COINBASE = 60  # segundos (1 minuto)
+INTERVAL_TWELVE = "1min"
 
-# Coinbase: BTC e ETH
-def buscar_candles_coinbase(asset):
-    granularity = 300  # 5 minutos
-    url = f"https://api.exchange.coinbase.com/products/{asset}/candles?granularity={granularity}"
+REFRESH_TIME = 60  # segundos entre atualizações
+
+# Criação do cliente Supabase
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ===================== FUNÇÕES =====================
+
+def fetch_coinbase_candles(symbol):
+    """Busca candles da Coinbase (1min)"""
+    url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity={INTERVAL_COINBASE}"
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        # Reordena candles para do mais antigo ao mais recente
-        candles = sorted(data, key=lambda x: x[0])
-        return candles
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        df = pd.DataFrame(data, columns=["time","low","high","open","close","volume"])
+        df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+        return df
+    except Exception as e:
+        print(f"[WARNING] Falha ao buscar candles Coinbase {symbol}: {e}")
+        return None
+
+def fetch_twelfthdata_candles(symbol):
+    """Busca candles do TwelveData (1min)"""
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={INTERVAL_TWELVE}&outputsize=100&apikey={TWELVEDATA_KEY}"
+    try:
+        r = requests.get(url, timeout=10).json()
+        if "values" not in r:
+            print(f"[WARNING] TwelveData retornou sem 'values' para {symbol}: {r}")
+            return None
+        df = pd.DataFrame(r["values"])
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        df = df.rename(columns={"open":"open","high":"high","low":"low","close":"close","volume":"volume"})
+        df = df[["datetime","open","high","low","close","volume"]]
+        df[["open","high","low","close","volume"]] = df[["open","high","low","close","volume"]].astype(float)
+        return df
+    except Exception as e:
+        print(f"[WARNING] Falha ao buscar candles TwelveData {symbol}: {e}")
+        return None
+
+def calculate_vwap(df):
+    """Calcula VWAP"""
+    try:
+        df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
+        vwap = (df["typical_price"] * df["volume"]).sum() / df["volume"].sum()
+        return vwap
     except:
         return None
 
-# TwelveData: EUR/USD e XAU/USD
-TD_API_KEY = "SUA_CHAVE_TWELVEDATA"  # Substitua pela sua chave
-def buscar_candles_twelvedata(asset):
-    interval = "1min"  # Intervalo ideal para day trade
-    url = f"https://api.twelvedata.com/time_series?symbol={asset}&interval={interval}&apikey={TD_API_KEY}&outputsize=30"
+def generate_signal(price, vwap):
+    """Define sinal de compra/venda/neutro"""
+    if price is None or vwap is None:
+        return "NEUTRO"
+    if price > vwap:
+        return "VENDA"
+    elif price < vwap:
+        return "COMPRA"
+    else:
+        return "NEUTRO"
+
+def get_signals():
+    """Retorna sinais atualizados para todos os ativos"""
+    signals = {}
+
+    # Coinbase
+    for asset in ASSETS_COINBASE:
+        df = fetch_coinbase_candles(asset)
+        if df is not None and not df.empty:
+            price = df["close"].iloc[-1]
+            vwap = calculate_vwap(df)
+            signal = generate_signal(price, vwap)
+        else:
+            price = None
+            vwap = None
+            signal = "NEUTRO"
+        signals[asset] = {"preco": price, "vwap": vwap, "sinal": signal}
+
+    # TwelveData
+    for asset in ASSETS_TWELVE:
+        df = fetch_twelfthdata_candles(asset)
+        if df is not None and not df.empty:
+            price = df["close"].iloc[-1]
+            vwap = calculate_vwap(df)
+            signal = generate_signal(price, vwap)
+        else:
+            price = None
+            vwap = None
+            signal = "NEUTRO"
+        signals[asset] = {"preco": price, "vwap": vwap, "sinal": signal}
+
+    return signals
+
+def upsert_ativo(nome, preco, vwap, sinal):
+    """Atualiza ou insere ativo no Supabase"""
+    payload = {"nome": nome, "preco": preco, "vwap": vwap, "sinal": sinal}
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if "values" in data:
-            candles = [
-                [v["datetime"], float(v["open"]), float(v["high"]), float(v["low"]), float(v["close"]), float(v["volume"])]
-                for v in reversed(data["values"])
-            ]
-            return candles
-        return None
-    except:
-        return None
+        supabase.table("ativos").upsert(payload, on_conflict="nome").execute()
+    except Exception as e:
+        print(f"[ERROR] Erro ao upsertar no Supabase para {nome}: {e}")
 
-# Atualiza o cache de sinais
-def atualizar_sinal(asset):
-    if asset in ["BTC-USD", "ETH-USD"]:
-        candles = buscar_candles_coinbase(asset)
-    else:
-        candles = buscar_candles_twelvedata(asset)
-
-    if candles:
-        vwap = calcular_vwap(candles)
-        preco = candles[-1][4] if candles else None
-        sinal = "COMPRA" if preco and vwap and preco > vwap else "VENDA" if preco and vwap and preco < vwap else "NEUTRO"
-        cache_sinais[asset] = {"sinal": sinal, "preco": preco, "vwap": vwap}
-    else:
-        cache_sinais[asset] = {"sinal": "NEUTRO", "preco": None, "vwap": None}
-
-# Loop principal do monitor
-def monitor_loop():
+def background_loop():
+    """Loop principal em thread separada"""
     while True:
-        for asset in ASSETS:
-            atualizar_sinal(asset)
-        time.sleep(60)  # Atualiza a cada 1 minuto
+        signals = get_signals()
+        for nome, dados in signals.items():
+            upsert_ativo(nome, dados["preco"], dados["vwap"], dados["sinal"])
+        time.sleep(REFRESH_TIME)
 
-# Inicia thread em background
+# ===================== FLASK =====================
+app = Flask(__name__)
+
+@app.route("/api/signals")
+def api_signals():
+    signals = get_signals()
+    return jsonify(signals)
+
 def start_background_thread():
-    thread = threading.Thread(target=monitor_loop, daemon=True)
-    thread.start()
+    t = threading.Thread(target=background_loop, daemon=True)
+    t.start()
 
-# Retorna sinais atuais
-def get_current_signals():
-    return cache_sinais
+# ===================== INICIALIZAÇÃO =====================
+if __name__ == "__main__":
+    print("Iniciando VWAP Monitor (Coinbase + TwelveData)...")
+    start_background_thread()
+    app.run(host="0.0.0.0", port=5000)
