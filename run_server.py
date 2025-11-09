@@ -1,11 +1,16 @@
 # run_server.py
-from flask import Flask, render_template
-from monitor_vwap_real import supabase  # reuse client if available
 import os
+from flask import Flask, render_template
+from supabase import create_client, Client
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE = os.getenv("SUPABASE_TABLE_SIGNALS", "sinais_vwap")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.route("/")
 def dashboard():
