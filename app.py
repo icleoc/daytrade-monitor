@@ -5,12 +5,10 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    # Renderiza o dashboard
-    return render_template('dashboard.html')
+    return render_template('index.html')
 
 @app.route('/vwap')
 def get_vwap():
-    # Exemplo simples de dado dinâmico
     vwap_value = round(random.uniform(9.8, 10.2), 4)
     return jsonify({"vwap": vwap_value})
 
