@@ -1,88 +1,91 @@
-import os
 import threading
 import time
+import os
 import requests
 import pandas as pd
 from supabase import create_client, Client
 
-# Configurações
-ASSETS = os.environ.get("ASSETS", "BTC-USD,ETH-USD,EUR/USD,XAU/USD").split(",")
-COINBASE_GRANULARITY = int(os.environ.get("COINBASE_GRANULARITY", 60))  # segundos
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 60))  # segundos
-TWELVEDATA_API_KEY = os.environ.get("TWELVEDATA_API_KEY")
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-SUPABASE_TABLE_SIGNALS = os.environ.get("SUPABASE_TABLE_SIGNALS", "sinais")
+# Environment variables
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_TABLE_SIGNALS = os.getenv("SUPABASE_TABLE_SIGNALS")
+TWELVEDATA_API_KEY = os.getenv("TWELVEDATA_API_KEY")
+COINBASE_GRANULARITY = int(os.getenv("COINBASE_GRANULARITY", 300))  # segundos
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 10))  # segundos
+
+ASSETS = os.getenv("ASSETS", "BTC-USD,ETH-USD,EUR/USD,XAU/USD").split(",")
 
 # Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Armazena sinais atuais e últimos valores válidos
-signals = {asset: {"preco": None, "vwap": None, "sinal": "NEUTRO"} for asset in ASSETS}
+# Global signals dictionary
+signals_data = {asset: {"preco": None, "vwap": None, "sinal": "NEUTRO"} for asset in ASSETS}
 
-def fetch_coinbase_candles(symbol):
-    url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity={COINBASE_GRANULARITY}"
+def fetch_coinbase_candles(symbol, granularity):
+    url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity={granularity}"
     try:
-        r = requests.get(url)
+        r = requests.get(url, timeout=10)
         r.raise_for_status()
         data = r.json()
         if not data:
             return None
-        df = pd.DataFrame(data, columns=["time", "low", "high", "open", "close", "volume"])
-        df["vwap"] = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
-        latest = df.iloc[-1]
-        return {"preco": latest["close"], "vwap": latest["vwap"]}
-    except:
+        df = pd.DataFrame(data, columns=["time","low","high","open","close","volume"])
+        df.sort_values("time", inplace=True)
+        return df
+    except Exception as e:
+        print(f"Falha ao buscar candles Coinbase {symbol}: {e}")
         return None
 
-def fetch_tw_data(symbol):
-    interval = "1min"
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={TWELVEDATA_API_KEY}&outputsize=20"
+def fetch_twelvedata_candles(symbol, interval="1min"):
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={TWELVEDATA_API_KEY}"
     try:
-        r = requests.get(url).json()
-        values = r.get("values")
-        if not values:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if "values" not in data:
             return None
-        df = pd.DataFrame(values)
-        df["close"] = df["close"].astype(float)
-        df["volume"] = df["volume"].astype(float)
-        df["vwap"] = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
-        latest = df.iloc[0]
-        return {"preco": latest["close"], "vwap": latest["vwap"]}
-    except:
+        df = pd.DataFrame(data["values"])
+        df["close"] = pd.to_numeric(df["close"])
+        return df
+    except Exception as e:
+        print(f"Falha ao buscar candles TwelveData {symbol}: {e}")
         return None
 
-def calculate_signal(preco, vwap):
-    if preco is None or vwap is None:
-        return "NEUTRO"
-    if preco > vwap:
-        return "COMPRA"
-    elif preco < vwap:
-        return "VENDA"
-    return "NEUTRO"
+def calculate_vwap(df):
+    if df is None or df.empty:
+        return None
+    df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
+    vwap = (df["typical_price"] * df["volume"]).sum() / df["volume"].sum()
+    return vwap
 
 def update_signals():
     while True:
         for asset in ASSETS:
-            result = None
-            if asset in ["BTC-USD", "ETH-USD"]:
-                result = fetch_coinbase_candles(asset)
+            if asset.endswith("-USD"):  # Crypto -> Coinbase
+                df = fetch_coinbase_candles(asset, COINBASE_GRANULARITY)
+            else:  # Forex/Gold -> TwelveData
+                df = fetch_twelvedata_candles(asset, interval="1min")
+
+            if df is not None:
+                preco_atual = df["close"].iloc[-1]
+                vwap = calculate_vwap(df)
+                if preco_atual > vwap:
+                    sinal = "COMPRA"
+                elif preco_atual < vwap:
+                    sinal = "VENDA"
+                else:
+                    sinal = "NEUTRO"
+                signals_data[asset] = {"preco": preco_atual, "vwap": vwap, "sinal": sinal}
             else:
-                result = fetch_tw_data(asset)
+                signals_data[asset] = {"preco": None, "vwap": None, "sinal": "NEUTRO"}
 
-            # Mantém último valor válido se falhar
-            preco = result["preco"] if result else signals[asset]["preco"]
-            vwap = result["vwap"] if result else signals[asset]["vwap"]
-            sinal = calculate_signal(preco, vwap)
-
-            signals[asset] = {"preco": preco, "vwap": vwap, "sinal": sinal}
-
-            # Persistência no Supabase
-            payload = {"nome": asset, "preco": preco, "vwap": vwap, "sinal": sinal}
-            try:
-                supabase.table(SUPABASE_TABLE_SIGNALS).upsert(payload, on_conflict=["nome"]).execute()
-            except:
-                pass
+        # Save signals to Supabase
+        try:
+            supabase.table(SUPABASE_TABLE_SIGNALS).upsert([
+                {"id": 1, **signals_data}
+            ]).execute()
+        except Exception as e:
+            print(f"Falha ao atualizar Supabase: {e}")
 
         time.sleep(POLL_INTERVAL)
 
@@ -91,4 +94,4 @@ def start_background_thread():
     thread.start()
 
 def get_signals():
-    return signals
+    return signals_data
