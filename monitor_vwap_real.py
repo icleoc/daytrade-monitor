@@ -1,68 +1,88 @@
 import time
 import threading
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from supabase import create_client, Client
 
-# --- CONFIGURAÇÕES SUPABASE ---
-SUPABASE_URL = "<sua-supabase-url>"
-SUPABASE_KEY = "<sua-supabase-key>"
+# ======================
+# CONFIGURAÇÃO
+# ======================
+
+# Supabase
+SUPABASE_URL = "https://<SEU-PROJETO>.supabase.co"  # substitua
+SUPABASE_KEY = "<SUA-CHAVE>"  # substitua
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- PARES A SEREM MONITORADOS ---
-ASSETS = ["BTC-USD", "ETH-USD", "EUR/USD", "XAU/USD"]
-
-# --- INTERVALOS ---
+# Coinbase
+COINBASE_ASSETS = ["BTC-USD", "ETH-USD"]
 COINBASE_GRANULARITY = 60  # 1 minuto em segundos
-TWELVEDATA_INTERVAL = "1min"
 
-# --- FUNÇÕES DE FETCH ---
+# TwelveData
+TWELVEDATA_ASSETS = ["EUR/USD", "XAU/USD"]
+TWELVEDATA_INTERVAL = "1min"  # intervalo válido
+TWELVEDATA_API_KEY = "<SUA_CHAVE_TWELVEDATA>"  # substitua
 
-def fetch_coinbase_candles(symbol):
-    url = f"https://api.exchange.coinbase.com/products/{symbol}/candles"
-    params = {"granularity": COINBASE_GRANULARITY}
+# Loop de atualização em segundos
+UPDATE_INTERVAL = 60
+
+# ======================
+# FUNÇÕES DE SUPORTE
+# ======================
+
+def fetch_coinbase_candles(symbol: str):
+    url = f"https://api.exchange.coinbase.com/products/{symbol}/candles?granularity={COINBASE_GRANULARITY}"
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"Falha ao buscar candles Coinbase {symbol}: {e}")
+        return None
+
+def fetch_twelvedata_candles(symbol: str):
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={TWELVEDATA_INTERVAL}&apikey={TWELVEDATA_API_KEY}&outputsize=1"
+    try:
+        r = requests.get(url, timeout=10)
         r.raise_for_status()
         data = r.json()
-        if not data:
+        if "values" in data and len(data["values"]) > 0:
+            return data["values"]
+        else:
+            print(f"TwelveData retornou sem 'values' para {symbol}: {data}")
             return None
-        # data = [[time, low, high, open, close, volume], ...]
-        close_prices = [c[4] for c in data]
-        return close_prices
     except Exception as e:
-        print(f"[WARNING] Falha ao buscar candles Coinbase {symbol}: {e}")
+        print(f"Falha ao buscar candles TwelveData {symbol}: {e}")
         return None
 
-def fetch_twelvedata_candles(symbol):
-    url = "https://api.twelvedata.com/time_series"
-    params = {
-        "symbol": symbol,
-        "interval": TWELVEDATA_INTERVAL,
-        "apikey": "<34b1f0bac586484c97725bbbbddad099>",
-        "outputsize": 500
-    }
-    try:
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if "values" not in data or not data["values"]:
-            return None
-        close_prices = [float(c["close"]) for c in reversed(data["values"])]
-        return close_prices
-    except Exception as e:
-        print(f"[WARNING] TwelveData retornou sem 'values' para {symbol}: {e}")
+def calculate_vwap(candles):
+    if not candles:
         return None
-
-# --- CÁLCULO DE VWAP SIMPLES ---
-
-def calculate_vwap(prices):
-    if not prices:
+    total_volume = 0
+    total_vwap = 0
+    for c in candles:
+        if isinstance(c, list):  # Coinbase: [time, low, high, open, close, volume]
+            price = float(c[4])
+            volume = float(c[5])
+        elif isinstance(c, dict):  # TwelveData: dict
+            price = float(c["close"])
+            volume = float(c.get("volume", 1))
+        else:
+            continue
+        total_vwap += price * volume
+        total_volume += volume
+    if total_volume == 0:
         return None
-    vwap = sum(prices) / len(prices)
-    return vwap
+    return total_vwap / total_volume
 
-# --- FUNÇÃO DE UPLOAD PARA SUPABASE ---
+def determine_signal(price, vwap):
+    if price is None or vwap is None:
+        return "NEUTRO"
+    if price > vwap:
+        return "COMPRA"
+    elif price < vwap:
+        return "VENDA"
+    else:
+        return "NEUTRO"
 
 def upsert_ativo(nome, preco, vwap, sinal):
     payload = {
@@ -70,52 +90,49 @@ def upsert_ativo(nome, preco, vwap, sinal):
         "preco": preco,
         "vwap": vwap,
         "sinal": sinal,
-        "updated_at": datetime.utcnow().isoformat()
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }
     try:
         supabase.table("ativos").upsert(payload, on_conflict="nome").execute()
     except Exception as e:
-        print(f"[ERROR] Erro ao upsertar no Supabase para {nome}: {e}")
+        print(f"Erro ao upsertar no Supabase para {nome}: {e}")
 
-# --- LOOP PRINCIPAL ---
+# ======================
+# LOOP PRINCIPAL
+# ======================
 
 def monitor_loop():
     while True:
-        for asset in ASSETS:
-            if asset in ["BTC-USD", "ETH-USD"]:
-                prices = fetch_coinbase_candles(asset)
-            else:
-                prices = fetch_twelvedata_candles(asset)
-            
-            if prices:
-                vwap = calculate_vwap(prices)
-                last_price = prices[-1]
-                sinal = "NEUTRO"
-                if last_price > vwap:
-                    sinal = "COMPRA"
-                elif last_price < vwap:
-                    sinal = "VENDA"
-            else:
-                vwap = None
-                last_price = None
-                sinal = "NEUTRO"
-            
-            print(f"{asset} -> sinal={sinal} preco={last_price} vwap={vwap}")
-            upsert_ativo(asset, last_price, vwap, sinal)
-        
-        # Aguarda 1 minuto para próximo ciclo
-        time.sleep(60)
+        # Coinbase
+        for asset in COINBASE_ASSETS:
+            candles = fetch_coinbase_candles(asset)
+            vwap = calculate_vwap(candles)
+            price = float(candles[-1][4]) if candles else None
+            signal = determine_signal(price, vwap)
+            upsert_ativo(asset, price, vwap, signal)
+            print(f"{asset} -> sinal={signal} preco={price} vwap={vwap}")
 
-# --- THREAD DE BACKGROUND ---
+        # TwelveData
+        for asset in TWELVEDATA_ASSETS:
+            candles = fetch_twelvedata_candles(asset)
+            vwap = calculate_vwap(candles)
+            price = float(candles[0]["close"]) if candles else None
+            signal = determine_signal(price, vwap)
+            upsert_ativo(asset, price, vwap, signal)
+            print(f"{asset} -> sinal={signal} preco={price} vwap={vwap}")
+
+        time.sleep(UPDATE_INTERVAL)
 
 def start_background_thread():
     thread = threading.Thread(target=monitor_loop, daemon=True)
     thread.start()
 
-# --- INICIO ---
+# ======================
+# EXECUÇÃO AUTOMÁTICA
+# ======================
 if __name__ == "__main__":
-    print(f"Iniciando VWAP Monitor (Coinbase + TwelveData). Assets: {ASSETS}")
+    print("Iniciando VWAP Monitor (Coinbase + TwelveData)")
     start_background_thread()
-    # Mantém o script rodando
+    # Mantém o script vivo
     while True:
         time.sleep(1)
