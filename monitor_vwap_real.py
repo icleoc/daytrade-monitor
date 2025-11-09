@@ -5,6 +5,7 @@ import requests
 
 current_signals = {}
 
+# Definindo os ativos
 ASSETS_COINBASE = ["BTC-USD", "ETH-USD"]
 ASSETS_TWELVEDATA = ["EUR/USD", "XAU/USD"]
 
@@ -12,6 +13,7 @@ TWELVEDATA_API_KEY = os.environ.get("TWELVEDATA_API_KEY")
 COINBASE_GRANULARITY = int(os.environ.get("COINBASE_GRANULARITY", 60))
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 10))
 
+# Função para buscar dados da Coinbase
 def fetch_coinbase(asset):
     url = f"https://api.exchange.coinbase.com/products/{asset}/candles?granularity={COINBASE_GRANULARITY}"
     try:
@@ -20,15 +22,16 @@ def fetch_coinbase(asset):
         data = r.json()
         if not data:
             return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
-        # Coinbase retorna [time, low, high, open, close, volume], pegamos preço de fechamento
+        # Coinbase retorna [time, low, high, open, close, volume]
         close_prices = [c[4] for c in data]
         preco = close_prices[-1]
         vwap = sum([(c[1]+c[2]+c[4])/3*c[5] for c in data]) / sum([c[5] for c in data])
         sinal = "COMPRA" if preco > vwap else "VENDA" if preco < vwap else "NEUTRO"
         return {"preco": preco, "vwap": vwap, "sinal": sinal}
-    except:
+    except Exception as e:
         return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
 
+# Função para buscar dados da TwelveData
 def fetch_twelvedata(asset):
     interval = "1min"
     symbol = asset.replace("/", "")
@@ -45,9 +48,10 @@ def fetch_twelvedata(asset):
         vwap = sum([p*v for p,v in zip(close_prices, volume)])/sum(volume) if sum(volume) > 0 else preco
         sinal = "COMPRA" if preco > vwap else "VENDA" if preco < vwap else "NEUTRO"
         return {"preco": preco, "vwap": vwap, "sinal": sinal}
-    except:
+    except Exception as e:
         return {"preco": None, "vwap": None, "sinal": "NEUTRO"}
 
+# Loop principal do monitoramento
 def monitor_loop():
     while True:
         for asset in ASSETS_COINBASE:
@@ -56,6 +60,7 @@ def monitor_loop():
             current_signals[asset] = fetch_twelvedata(asset)
         time.sleep(POLL_INTERVAL)
 
+# Inicia thread de background
 def start_background_thread():
     thread = threading.Thread(target=monitor_loop, daemon=True)
     thread.start()
