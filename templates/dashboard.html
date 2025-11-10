@@ -2,42 +2,36 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>VWAP Monitor</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        table { border-collapse: collapse; margin-bottom: 30px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-        th { background-color: #f4f4f4; }
-        .failed { color: red; font-weight: bold; }
-    </style>
+    <title>Dashboard VWAP</title>
 </head>
 <body>
-    <h1>VWAP Monitor</h1>
+    <h1>Dashboard de Ativos</h1>
 
-    {% if failed_assets %}
-        <p class="failed">⚠️ Falha ao carregar dados dos seguintes ativos: {{ failed_assets|join(', ') }}</p>
-    {% endif %}
-
-    {% for ticker, df in assets_data.items() %}
-        <h2>{{ ticker }}</h2>
-        <table>
-            <thead>
-                <tr>
-                    {% for col in df.columns %}
-                        <th>{{ col }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in df.tail(5).itertuples() %}
+    {% if df %}
+        {% for symbol, data in df.items() %}
+            <h2>{{ symbol }}</h2>
+            {% if not data.empty %}
+                <table border="1">
                     <tr>
-                        {% for value in row[1:] %}
-                            <td>{{ value }}</td>
+                        {% for col in data.columns %}
+                            <th>{{ col }}</th>
                         {% endfor %}
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% endfor %}
+                    {% for row in data.tail(5).itertuples() %}
+                        <tr>
+                            {% for val in row[1:] %}
+                                <td>{{ val }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </table>
+            {% else %}
+                <p>Sem dados disponíveis.</p>
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        <p>Não há dados para exibir.</p>
+    {% endif %}
+
 </body>
 </html>
