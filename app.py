@@ -9,7 +9,8 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 @app.route("/")
 def index():
     # main dashboard
-    return render_template("dashboard.html", symbols=[s["symbol"] for s in SYMBOLS], update_interval=UPDATE_INTERVAL_SECONDS)
+    return render_template("dashboard.html", symbols=SYMBOLS, update_interval=UPDATE_INTERVAL_SECONDS)
+
 
 @app.route("/api/data")
 def api_data():
