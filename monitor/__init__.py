@@ -1,2 +1,2 @@
-# monitor/__init__.py
-# Inicialização simples para o módulo monitor
+# monitor package init
+from .monitor_vwap_real import get_all_vwap_data
