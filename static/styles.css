@@ -30,6 +30,24 @@ h1 {
   transform: scale(1.05);
 }
 
+.signal {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin-top: 8px;
+}
+
+.signal.buy {
+  color: #00ff99;
+}
+
+.signal.sell {
+  color: #ff5555;
+}
+
+.signal.neutral {
+  color: #cccccc;
+}
+
 .time {
   font-size: 0.8em;
   color: #aaa;
