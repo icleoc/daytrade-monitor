@@ -1,51 +1,35 @@
 # app.py
-from flask import Flask, render_template, jsonify
-from helpers import (
-    fetch_crypto_compare_histo,
-    compute_vwap_and_bands,
-    compute_signal,
-)
-from config import SYMBOLS, UPDATE_INTERVAL_SECONDS
 import traceback
+from flask import Flask, render_template, jsonify
+from config import SYMBOLS, UPDATE_INTERVAL_SECONDS
+from helpers import get_symbol_data
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", template_folder="templates")
 
 @app.route("/")
 def index():
-    """Página principal (dashboard)."""
-    return render_template(
-        "dashboard.html",
-        symbols=[s["symbol"] for s in SYMBOLS],
-        update_interval=UPDATE_INTERVAL_SECONDS,
-    )
+    # Pass symbol list to frontend
+    return render_template("dashboard.html", symbols=SYMBOLS, update_interval=UPDATE_INTERVAL_SECONDS)
 
 @app.route("/api/data")
 def api_data():
-    """Endpoint que fornece dados atualizados de preço e sinal."""
-    data = []
-    for s in SYMBOLS:
-        sym = s["symbol"]
+    results = {}
+    errors = {}
+    for sym in SYMBOLS:
         try:
-            df = fetch_crypto_compare_histo(sym)
-            vwap_data = compute_vwap_and_bands(df)
-            last_signal = compute_signal(vwap_data)
-            data.append({
-                "symbol": sym,
-                "price": float(vwap_data["close"].iloc[-1]),
-                "signal": last_signal,
-                "chart": vwap_data.tail(50).to_dict(orient="records"),
-            })
+            # sym is like "BTCUSD"
+            data_obj = get_symbol_data(sym)
+            results[sym] = data_obj
         except Exception as e:
-            print(f"[ERRO] Falha ao processar {sym}: {e}")
+            # capture error and keep service alive
+            err = f"{e}"
+            errors[sym] = err
+            results[sym] = {"data": [], "signal": {"signal": "ERROR", "reason": err, "time": None}}
+            # print stack for Render logs
+            print(f"[ERROR] {sym}: {err}")
             traceback.print_exc()
-            data.append({
-                "symbol": sym,
-                "error": str(e),
-                "chart": [],
-                "signal": "ERROR",
-                "price": None,
-            })
-    return jsonify(data)
+    return jsonify({"results": results, "errors": errors})
 
 if __name__ == "__main__":
+    # dev server
     app.run(host="0.0.0.0", port=5000)
