@@ -1,28 +1,28 @@
-async function atualizarVWAP() {
-    const response = await fetch("/api/vwap");
-    const data = await response.json();
-    const cardsDiv = document.getElementById("cards");
-    cardsDiv.innerHTML = "";
-
-    Object.keys(data).forEach(asset => {
-        const info = data[asset];
-        if (info.error) {
-            cardsDiv.innerHTML += `
-                <div class="card">
-                    <h2>${asset}</h2>
-                    <p>${info.error}</p>
-                </div>`;
-        } else {
-            cardsDiv.innerHTML += `
-                <div class="card">
-                    <h2>${asset}</h2>
-                    <p><strong>Preço:</strong> ${info.price}</p>
-                    <p><strong>VWAP:</strong> ${info.vwap}</p>
-                    <p class="${info.signal.toLowerCase()}"><strong>Sinal:</strong> ${info.signal}</p>
-                </div>`;
-        }
+// static/script.js
+async function loadVWAP(){
+  try{
+    const res = await fetch('/api/vwap');
+    const j = await res.json();
+    const container = document.getElementById('cards');
+    container.innerHTML = '';
+    j.assets.forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      if(a.error){
+        card.innerHTML = `<h3>${a.symbol}</h3><p class="error">${a.error}</p>`;
+      } else {
+        card.innerHTML = `<h3>${a.symbol}</h3>
+          <p>${a.price !== null ? a.price.toFixed(4) : '-'}</p>
+          <small>VWAP: ${a.vwap !== null ? a.vwap.toFixed(4) : '-'}</small>
+          <p>Sinal: <b>${a.signal}</b></p>
+          <small>${a.timeframe}</small>`;
+      }
+      container.appendChild(card);
     });
+  }catch(err){
+    console.error(err);
+  }
 }
 
-setInterval(atualizarVWAP, 5000);
-window.onload = atualizarVWAP;
+setInterval(loadVWAP, 5000);
+window.onload = loadVWAP;
