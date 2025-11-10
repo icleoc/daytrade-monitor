@@ -1,22 +1,15 @@
 import yfinance as yf
 import pandas as pd
 
-# Tickers ajustados para contratos contínuos ou ativos relevantes
-ASSETS = [
-    '^BVSP',       # Índice futuro contínuo
-    'USDBRL=X',    # Dólar
-    # Adicione outros ativos se necessário
-]
-
-def get_assets_data(assets=ASSETS, interval='15m', period='7d'):
+def get_assets_data(symbols, interval='15m', period='7d'):
     all_data = {}
-    for symbol in assets:
+    for symbol in symbols:
         try:
             df = yf.download(symbol, interval=interval, period=period, progress=False)
-            if df.empty:
-                print(f"Aviso: ticker '{symbol}' não retornou dados")
-            all_data[symbol] = df
+            if not df.empty:
+                all_data[symbol] = df
+            else:
+                print(f"Sem dados para {symbol}")
         except Exception as e:
-            print(f"Falha ao obter ticker '{symbol}': {e}")
-            all_data[symbol] = pd.DataFrame()  # evita erro no dashboard
+            print(f"Falha ao obter ticker '{symbol}' reason: {e}")
     return all_data
