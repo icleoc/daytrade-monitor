@@ -1,89 +1,17 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <title>VWAP Monitor Day Trade</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #0b0b0b;
-      color: #fff;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      color: #00c3ff;
-      margin-bottom: 30px;
-    }
-    .container {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 15px;
-      justify-content: center;
-    }
-    .card {
-      background-color: #121212;
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      box-shadow: 0 0 10px rgba(0, 195, 255, 0.3);
-      transition: transform 0.3s ease;
-    }
-    .card:hover { transform: scale(1.03); }
-    .sinal {
-      font-weight: bold;
-      font-size: 18px;
-      margin-top: 10px;
-      padding: 5px 10px;
-      border-radius: 8px;
-      display: inline-block;
-    }
-    .COMPRA { background-color: #1eaf60; }
-    .VENDA { background-color: #c73c3c; }
-    .NEUTRO { background-color: #666; }
-    footer {
-      margin-top: 30px;
-      text-align: center;
-      font-size: 14px;
-      color: #999;
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VWAP Monitor</title>
+<link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <h1>VWAP Monitor Day Trade</h1>
-  <div class="container" id="cards"></div>
-  <footer>Atualiza automaticamente a cada 5 segundos...</footer>
-
-  <script>
-    async function carregarDados() {
-      try {
-        const res = await fetch('/dados');
-        const data = await res.json();
-        const container = document.getElementById('cards');
-        container.innerHTML = '';
-
-        data.forEach(item => {
-          const card = document.createElement('div');
-          card.classList.add('card');
-          card.innerHTML = `
-            <h2>${item.ativo}</h2>
-            <p><strong>VWAP:</strong> ${item.vwap}</p>
-            <p><strong>RSI:</strong> ${item.rsi}</p>
-            <p><strong>MACD:</strong> ${item.macd}</p>
-            <p><strong>Hora:</strong> ${item.hora}</p>
-            <p class="sinal ${item.sinal}">${item.sinal}</p>
-          `;
-          container.appendChild(card);
-        });
-      } catch (e) {
-        console.error('Erro ao carregar dados', e);
-      }
-    }
-
-    carregarDados();
-    setInterval(carregarDados, 5000);
-  </script>
+<div class="container">
+<h1>VWAP Monitor Day Trade</h1>
+<div id="cards" class="cards"></div>
+<div class="footer">Atualiza automaticamente — intervalo configurado no servidor.</div>
+</div>
+<script src="/static/script.js"></script>
 </body>
 </html>
