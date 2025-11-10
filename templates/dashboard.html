@@ -1,66 +1,86 @@
-<!DOCTYPE html>
-<html lang="en">
+<!-- templates/dashboard.html -->
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Market Dashboard</title>
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<style>
-body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
-h1 { text-align: center; margin: 20px 0; color: #222; }
-.container { display: flex; flex-wrap: wrap; justify-content: center; }
-.card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  width: 200px;
-  margin: 10px;
-  padding: 20px;
-  text-align: center;
-}
-.signal-buy { color: green; font-weight: bold; }
-.signal-sell { color: red; font-weight: bold; }
-#chart { width: 80%; margin: 40px auto; height: 400px; }
-</style>
+  <meta charset="utf-8" />
+  <title>VWAP Monitor — Real</title>
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <style>
+    body { font-family: Inter, Roboto, Arial; background:#0f1724; color:#e6eef8; margin:20px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(420px,1fr)); gap:16px; }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.05)); border-radius:12px; padding:12px; box-shadow: 0 6px 18px rgba(2,6,23,0.6); transition: border 0.2s ease, box-shadow 0.2s ease; border: 2px solid rgba(255,255,255,0.03); }
+    .card.buy { border-color: rgba(34,197,94,0.9); box-shadow: 0 10px 28px rgba(34,197,94,0.06); }
+    .card.sell { border-color: rgba(239,68,68,0.9); box-shadow: 0 10px 28px rgba(239,68,68,0.06); }
+    .card .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .symbol { font-weight:700; font-size:18px; }
+    .signal-pill { padding:6px 10px; border-radius:999px; font-weight:600; }
+    .signal-pill.buy { background: rgba(34,197,94,0.12); color:#22c55e; }
+    .signal-pill.sell { background: rgba(239,68,68,0.12); color:#ef4444; }
+    .updated { font-size:12px; color:#9fb0c8; }
+    .plot-wrap { height:360px; }
+  </style>
 </head>
 <body>
-<h1>Market Dashboard</h1>
-<div id="cards" class="container"></div>
-<h2 style="text-align:center;">VWAP: <span id="vwap">...</span></h2>
-<div id="chart"></div>
+  <h2>VWAP Monitor — 15m — atualização a cada 1min</h2>
+  <div id="grid" class="grid"></div>
 
 <script>
+const UPDATE_INTERVAL_MS = 60 * 1000; // 1 minuto
+let state = {};  // store plot references
+
 async function fetchData() {
   const res = await fetch('/api/data');
-  const data = await res.json();
-
-  const container = document.getElementById('cards');
-  container.innerHTML = '';
-
-  for (const [symbol, price] of Object.entries(data.prices)) {
-    const signal = data.signals[symbol];
-    const signalClass = signal === 'BUY' ? 'signal-buy' : 'signal-sell';
-    container.innerHTML += `
-      <div class="card">
-        <h3>${symbol}</h3>
-        <p>Price: $${price.toFixed(2)}</p>
-        <p class="${signalClass}">${signal}</p>
-      </div>`;
-  }
-
-  document.getElementById('vwap').textContent = data.vwap;
-
-  const chartData = [{
-    x: Object.keys(data.prices),
-    y: Object.values(data.prices),
-    type: 'bar',
-    marker: { color: 'orange' }
-  }];
-  Plotly.newPlot('chart', chartData);
+  if (!res.ok) throw new Error('falha ao buscar /api/data');
+  return await res.json();
 }
 
-// Atualiza a cada 1 minuto
-fetchData();
-setInterval(fetchData, 60000);
-</script>
-</body>
-</html>
+function createCard(symbol) {
+  const container = document.getElementById('grid');
+  const card = document.createElement('div');
+  card.id = `card-${symbol}`;
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="header">
+      <div>
+        <div class="symbol">${symbol}</div>
+        <div class="updated" id="updated-${symbol}">—</div>
+      </div>
+      <div>
+        <div id="pill-${symbol}" class="signal-pill">—</div>
+      </div>
+    </div>
+    <div class="plot-wrap" id="plot-${symbol}" ></div>
+  `;
+  container.appendChild(card);
+  return card;
+}
+
+function plotForSymbol(symbol, payload) {
+  const elId = 'plot-' + symbol;
+  const plotEl = document.getElementById(elId);
+  if (!plotEl) return;
+
+  // build arrays
+  const candles = payload.candles || [];
+  const times = candles.map(c => new Date(c.time * 1000));
+  const open = candles.map(c => c.open);
+  const high = candles.map(c => c.high);
+  const low = candles.map(c => c.low);
+  const close = candles.map(c => c.close);
+  const vwap = candles.map(c => c.vwap);
+  const upper = candles.map(c => c.upper);
+  const lower = candles.map(c => c.lower);
+
+  // candlestick trace
+  const candlestick = {
+    x: times, open, high, low, close,
+    type: 'candlestick',
+    name: symbol,
+    increasing: {line: {width: 0.6}}, decreasing: {line: {width: 0.6}},
+    hovertemplate: '%{x}<br>O: %{open}<br>H: %{high}<br>L: %{low}<br>C: %{close}<extra></extra>'
+  };
+
+  // VWAP line
+  const vwapLine = {
+    x: times, y: vwap, type: 'scatter', mode: 'lines', name: 'VWAP',
+    line: {width:
