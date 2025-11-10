@@ -1,60 +1,52 @@
 from flask import Flask, jsonify, render_template
-import random
+from threading import Thread, Event
+import os
 import time
+from monitor_vwap_real import MonitorVWAP
 
-app = Flask(__name__)
 
-# === Configuração de ativos monitorados ===
-ATIVOS = ["PETR4", "VALE3", "ITUB4", "BBDC4", "MGLU3", "BBAS3"]
+app = Flask(__name__, static_folder='static', template_folder='templates')
 
-def gerar_dados_ativo(ativo):
-    """Simula dados de indicadores para cada ativo"""
-    vwap = round(random.uniform(9.5, 11.5), 4)
-    rsi = round(random.uniform(25, 80), 2)
-    macd = round(random.uniform(-1.5, 1.5), 3)
 
-    # Geração de sinal baseado em regras simples
-    if rsi < 30 and macd > 0:
-        sinal = "COMPRA"
-    elif rsi > 70 and macd < 0:
-        sinal = "VENDA"
-    else:
-        sinal = "NEUTRO"
+# Instancia o monitor (usa variáveis de ambiente)
+monitor = MonitorVWAP()
+stop_event = Event()
 
-    return {
-        "ativo": ativo,
-        "vwap": vwap,
-        "rsi": rsi,
-        "macd": macd,
-        "sinal": sinal,
-        "hora": time.strftime("%H:%M:%S")
-    }
 
 @app.route('/')
 def index():
-    return render_template('dashboard.html')
+return render_template('dashboard.html')
 
-@app.route('/dados')
-def dados():
-    """Retorna dados atualizados de todos os ativos"""
-    dados = [gerar_dados_ativo(ativo) for ativo in ATIVOS]
-    return jsonify(dados)
+
+@app.route('/api/signals')
+def api_signals():
+return jsonify(monitor.get_signals())
+
 
 @app.route('/vwap')
-def vwap_route():
-    return jsonify({"vwap": round(random.uniform(9.5, 11.5), 4)})
+def vwap_test():
+# rota de teste simples
+return jsonify({"vwap": monitor.get_sample_vwap()})
 
-@app.route('/rsi')
-def rsi_route():
-    return jsonify({"rsi": round(random.uniform(25, 80), 2)})
 
-@app.route('/macd')
-def macd_route():
-    return jsonify({"macd": round(random.uniform(-1.5, 1.5), 3)})
 
-@app.route('/status')
-def status():
-    return jsonify({"status": "API do Monitor VWAP funcionando!"})
+
+def background_loop(stop_event):
+# roda o monitor em loop
+while not stop_event.is_set():
+try:
+monitor.poll_once()
+except Exception as e:
+app.logger.exception('Erro no poll_once: %s', e)
+interval = int(os.getenv('POLL_INTERVAL', '15'))
+stop_event.wait(interval)
+
+
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# start background thread
+t = Thread(target=background_loop, args=(stop_event,), daemon=True)
+t.start()
+port = int(os.getenv('PORT', '5000'))
+app.run(host='0.0.0.0', port=port)
