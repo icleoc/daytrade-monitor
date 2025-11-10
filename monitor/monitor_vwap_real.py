@@ -1,11 +1,10 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
 
 TICKERS = ['WIN$N', 'EURUSD=X', 'GC=F']  # Mini-índice, Forex, Ouro
 INTERVAL = '15m'
-CANDLE_COUNT = 50  # ajuste automático se necessário
+CANDLE_COUNT = 50  # quantidade de velas para análise
 
 def calculate_vwap(df):
     vwap = (df['Close'] * df['Volume']).cumsum() / df['Volume'].cumsum()
@@ -16,11 +15,13 @@ def calculate_vwap(df):
 
 def get_signals(df, vwap):
     signals = []
-    if df.empty: return signals
-    if df['Close'].iloc[-1] > vwap.iloc[-1]:
-        signals.append({'time': df.index[-1].timestamp()*1000, 'price': df['Close'].iloc[-1], 'type':'Compra'})
-    elif df['Close'].iloc[-1] < vwap.iloc[-1]:
-        signals.append({'time': df.index[-1].timestamp()*1000, 'price': df['Close'].iloc[-1], 'type':'Venda'})
+    if df.empty: 
+        return signals
+    for i in range(len(df)):
+        if df['Close'].iloc[i] > vwap.iloc[i]:
+            signals.append({'time': df.index[i].timestamp()*1000, 'price': df['Close'].iloc[i], 'type':'Compra'})
+        elif df['Close'].iloc[i] < vwap.iloc[i]:
+            signals.append({'time': df.index[i].timestamp()*1000, 'price': df['Close'].iloc[i], 'type':'Venda'})
     return signals
 
 def get_assets_data():
@@ -30,15 +31,15 @@ def get_assets_data():
         if df.empty: continue
 
         vwap, upper, lower = calculate_vwap(df)
+        signals = get_signals(df, vwap)
 
         candles = [
-            {'time': int(idx.timestamp()*1000), 'open': row['Open'], 'high': row['High'], 'low': row['Low'], 'close': row['Close']}
+            {'x': int(idx.timestamp()*1000), 'o': row['Open'], 'h': row['High'], 'l': row['Low'], 'c': row['Close']}
             for idx, row in df.iterrows()
         ]
-        vwap_data = [{'time': int(idx.timestamp()*1000), 'value': val} for idx, val in vwap.iteritems()]
-        upper_band = [{'time': int(idx.timestamp()*1000), 'value': val} for idx, val in upper.iteritems()]
-        lower_band = [{'time': int(idx.timestamp()*1000), 'value': val} for idx, val in lower.iteritems()]
-        signals = get_signals(df, vwap)
+        vwap_data = [{'x': int(idx.timestamp()*1000), 'y': val} for idx, val in vwap.iteritems()]
+        upper_band = [{'x': int(idx.timestamp()*1000), 'y': val} for idx, val in upper.iteritems()]
+        lower_band = [{'x': int(idx.timestamp()*1000), 'y': val} for idx, val in lower.iteritems()]
 
         asset_data = {
             'ticker': ticker,
