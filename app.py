@@ -1,62 +1,65 @@
 from flask import Flask, render_template, jsonify
-from coinbase.wallet.client import Client as CoinbaseClient
-import requests
+import ccxt
+import yfinance as yf
 import pandas as pd
 import numpy as np
-import os
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# --- CHAVES (você adiciona direto no Render) ---
-COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")
-COINBASE_API_SECRET = os.getenv("COINBASE_API_SECRET")
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+# Configura exchanges
+coinbase = ccxt.coinbasepro()
 
-coinbase_client = CoinbaseClient(COINBASE_API_KEY, COINBASE_API_SECRET)
+# Lista de ativos
+crypto_symbols = ['BTC/USD', 'ETH/USD']
+forex_symbols = {'XAU/USD': 'GC=F', 'EUR/USD': 'EURUSD=X'}
 
-# --- FUNÇÃO PARA BUSCAR PREÇOS ATUAIS ---
-def get_prices():
-    prices = {}
-    # BTC/USD
-    prices['BTC'] = float(coinbase_client.get_spot_price(currency_pair='BTC-USD')['amount'])
-    # ETH/USD
-    prices['ETH'] = float(coinbase_client.get_spot_price(currency_pair='ETH-USD')['amount'])
-    # XAU/USD
-    prices['XAU'] = float(coinbase_client.get_spot_price(currency_pair='XAU-USD')['amount'])
-    # EUR/USD via Alpha Vantage
-    url = f'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=EUR&to_currency=USD&apikey={ALPHA_VANTAGE_API_KEY}'
-    r = requests.get(url).json()
-    prices['EUR'] = float(r["Realtime Currency Exchange Rate"]["5. Exchange Rate"])
-    return prices
+# Função para buscar cripto
+def get_crypto_prices():
+    data = {}
+    for symbol in crypto_symbols:
+        ticker = coinbase.fetch_ticker(symbol)
+        data[symbol] = ticker['last']
+    return data
 
-# --- FUNÇÃO VWAP SIMPLIFICADA ---
-def calculate_vwap(prices_history):
-    df = pd.DataFrame(prices_history)
-    df['vwap'] = (df['price'] * df['volume']).cumsum() / df['volume'].cumsum()
-    return df['vwap'].iloc[-1]
+# Função para buscar Forex e XAU
+def get_forex_prices():
+    data = {}
+    for key, yf_symbol in forex_symbols.items():
+        ticker = yf.Ticker(yf_symbol)
+        last_price = ticker.history(period="1d")['Close'][-1]
+        data[key] = float(last_price)
+    return data
 
-# --- ROTA DASHBOARD ---
+# Função VWAP
+def calculate_vwap(prices):
+    df = pd.DataFrame(prices.items(), columns=['symbol', 'price'])
+    df['volume'] = 1  # Simplificado: volume fictício
+    vwap = (df['price'] * df['volume']).sum() / df['volume'].sum()
+    return round(vwap, 2)
+
+@app.route('/api/data')
+def api_data():
+    crypto = get_crypto_prices()
+    forex = get_forex_prices()
+    all_data = {**crypto, **forex}
+    vwap = calculate_vwap(all_data)
+    
+    # Gerando sinais simples
+    signals = {}
+    for k, price in all_data.items():
+        signals[k] = 'BUY' if price < vwap else 'SELL'
+    
+    return jsonify({
+        'prices': all_data,
+        'vwap': vwap,
+        'signals': signals,
+        'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    })
+
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')
 
-# --- API DE PREÇOS ---
-@app.route('/api/prices')
-def api_prices():
-    prices = get_prices()
-    # Simulando histórico para VWAP
-    prices_history = [{'price': v, 'volume': 1} for v in prices.values()]
-    vwap = {k: calculate_vwap([{'price': v, 'volume': 1}]) for k, v in prices.items()}
-    return jsonify({'prices': prices, 'vwap': vwap})
-
-# --- ROTA HISTÓRICO PARA GRÁFICO ---
-@app.route('/api/historical/<symbol>')
-def api_historical(symbol):
-    # Dummy data para gráfico, 30 pontos
-    now = datetime.utcnow()
-    data = [{'time': (now - timedelta(minutes=i)).strftime('%H:%M'), 'price': np.random.uniform(90, 110)} for i in range(30)][::-1]
-    return jsonify(data)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
