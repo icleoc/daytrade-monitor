@@ -1,53 +1,68 @@
-import requests
+# monitor/monitor_vwap_real.py
 import os
+from monitor.data_fetchers import (
+    fetch_binance_ohlcv,
+    fetch_twelvedata_ohlcv,
+    fetch_yahoo_quote,
+    set_twelvedata_key
+)
+from utils.helpers import calc_vwap_from_ohlcv
 
-COINBASE_URL = "https://api.coinbase.com/v2/prices"
-TWELVE_URL = "https://api.twelvedata.com/price"
-TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
+# configurar key
+TWELVE_KEY = os.environ.get("TWELVEDATA_API_KEY") or os.environ.get("TWELVE_API_KEY")
+if TWELVE_KEY:
+    set_twelvedata_key(TWELVE_KEY)
 
-def get_coinbase_price(symbol):
+# Ativos que queremos (mantive a lista que você definiu no início)
+ASSETS = [
+    # symbol, source, exchange-specific symbol, timeframe
+    ("BTCUSD", "binance", "BTCUSDT", "1m"),
+    ("ETHUSD", "binance", "ETHUSDT", "1m"),
+    ("XAUUSD", "twelvedata", "XAUUSD", "5min"),
+    ("EURUSD", "twelvedata", "EURUSD", "5min"),
+    ("WINZ25", "yahoo", "WINZ25.SA", "1m"),  # fallback para WIN
+]
+
+def get_asset_vwap(symbol_tuple):
+    label, source, src_sym, tf = symbol_tuple
     try:
-        response = requests.get(f"{COINBASE_URL}/{symbol}/spot")
-        return float(response.json()["data"]["amount"])
-    except Exception as e:
-        print(f"Erro Coinbase {symbol}: {e}")
-        return None
+        if source == "binance":
+            ohlcv = fetch_binance_ohlcv(src_sym, interval=tf, limit=200)
+        elif source == "twelvedata":
+            ohlcv = fetch_twelvedata_ohlcv(src_sym, interval=tf, outputsize=200)
+        elif source == "yahoo":
+            # yahoo fallback: try quote -> not candles (use last price)
+            q = fetch_yahoo_quote(src_sym)
+            # build a synthetic single-candle list:
+            ohlcv = [{"t": q.get("timestamp") or 0, "open": q["price"], "high": q["price"],
+                      "low": q["price"], "close": q["price"], "volume": 0}]
+        else:
+            return {"symbol": label, "error": "unknown source"}
 
-def get_twelvedata_price(symbol):
-    try:
-        response = requests.get(f"{TWELVE_URL}?symbol={symbol}&apikey={TWELVE_API_KEY}")
-        return float(response.json()["price"])
-    except Exception as e:
-        print(f"Erro TwelveData {symbol}: {e}")
-        return None
+        vwap = calc_vwap_from_ohlcv(ohlcv)
+        last_price = ohlcv[-1]["close"] if ohlcv else None
 
-def get_b3_price():
-    try:
-        response = requests.get("https://brapi.dev/api/quote/WINZ25")
-        return float(response.json()["results"][0]["regularMarketPrice"])
-    except Exception as e:
-        print(f"Erro B3 WINZ25: {e}")
-        return None
+        # SINAL: definição simples — preço > vwap => 'BUY', price < vwap => 'SELL', else 'NEUTRAL'
+        signal = "NEUTRAL"
+        if last_price is not None and vwap is not None:
+            if last_price > vwap * 1.0005:
+                signal = "BUY"
+            elif last_price < vwap * 0.9995:
+                signal = "SELL"
 
-def calculate_vwap(prices):
-    return round(sum(prices) / len(prices), 4) if prices else None
+        return {
+            "symbol": label,
+            "source": source,
+            "price": float(last_price) if last_price is not None else None,
+            "vwap": float(vwap) if vwap is not None else None,
+            "signal": signal,
+            "timeframe": tf
+        }
+    except Exception as e:
+        return {"symbol": label, "error": str(e)}
 
 def get_all_vwap_data():
-    assets = {
-        "BTCUSD": get_coinbase_price("BTC-USD"),
-        "ETHUSD": get_coinbase_price("ETH-USD"),
-        "XAUUSD": get_twelvedata_price("XAU/USD"),
-        "EURUSD": get_twelvedata_price("EUR/USD"),
-        "WINZ25": get_b3_price()
-    }
-
-    vwap_results = {}
-    for asset, price in assets.items():
-        if price:
-            vwap = calculate_vwap([price])
-            signal = "COMPRA" if price < vwap else "VENDA" if price > vwap else "NEUTRO"
-            vwap_results[asset] = {"price": price, "vwap": vwap, "signal": signal}
-        else:
-            vwap_results[asset] = {"error": "Sem dados"}
-
-    return vwap_results
+    results = []
+    for s in ASSETS:
+        results.append(get_asset_vwap(s))
+    return results
