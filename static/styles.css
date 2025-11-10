@@ -1,60 +1,13 @@
-body {
-  background: #0e1117;
-  color: #e0e0e0;
-  font-family: 'Arial', sans-serif;
-  text-align: center;
-  padding: 30px;
-}
-
-h1 {
-  color: #00ffcc;
-  margin-bottom: 30px;
-}
-
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-  justify-items: center;
-}
-
-.card {
-  background: #1a1d24;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 0 10px #00ffcc55;
-  transition: transform 0.3s;
-}
-
-.card:hover {
-  transform: scale(1.05);
-}
-
-.signal {
-  font-weight: bold;
-  font-size: 1.1em;
-  margin-top: 8px;
-}
-
-.signal.buy {
-  color: #00ff99;
-}
-
-.signal.sell {
-  color: #ff5555;
-}
-
-.signal.neutral {
-  color: #cccccc;
-}
-
-.time {
-  font-size: 0.8em;
-  color: #aaa;
-}
-
-.update-info {
-  margin-top: 30px;
-  font-size: 0.9em;
-  color: #999;
-}
+body{font-family:Inter,system-ui,Arial,Helvetica,sans-serif;margin:0;background:#0b0f1a;color:#e6eef8}
+header{padding:18px;background:linear-gradient(90deg,#071428,#0b1b2b);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+header h1{margin:0;font-size:20px}
+#cards-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;padding:16px}
+.card{background:linear-gradient(180deg,#071827,#0b2233);padding:12px;border-radius:12px;box-shadow:0 6px 24px rgba(2,6,23,.6);min-height:260px}
+.card.buy{border:2px solid rgba(46,204,113,.22)}
+.card.sell{border:2px solid rgba(231,76,60,.22)}
+.card.neutral{border:2px solid rgba(120,130,145,.08)}
+.card h2{margin:0 0 8px 0;font-size:16px}
+.card .price{font-size:18px;margin-bottom:6px}
+.card .vwap{font-size:14px;margin-bottom:8px}
+.plot{width:100%;height:170px}
+.footer-note{font-size:12px;color:#9fb1c7;margin-top:8px}
