@@ -4,128 +4,176 @@
   <meta charset="utf-8" />
   <title>VWAP Monitor</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 12px; background:#0f1720; color:#e6eef6 }
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue"; background:#0b1220; color:#e6eef6; margin:12px; }
+    header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:12px; }
-    .card { background:#0b1220; border-radius:8px; padding:8px; box-shadow: 0 6px 18px rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.03);}
-    .card-header { display:flex; align-items:center; justify-content:space-between; padding:6px 8px;}
-    .symbol { font-weight:700; font-size:18px; }
-    .signal { font-weight:700; padding:6px 10px; border-radius:6px; color:#072; background:#082a00; }
-    .signal.sell { color:#ffebee; background:#3b0000; }
+    .card { background:#071017; border-radius:10px; padding:8px; border:1px solid rgba(255,255,255,0.03); box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+    .card-header { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; }
+    .symbol { font-weight:700; font-size:16px; }
+    .signal { font-weight:700; padding:6px 10px; border-radius:8px; color:#0f1720; background:#a6f99b; }
+    .signal.sell { background:#ff8b8b; color:#2b0505; }
     .signal.neutral { background:#2a2f38; color:#c9d1d9; }
-    .plot { height:320px; }
+    .plot { height:360px; }
+    .error { padding:8px; color:#ffdede; background:#3b1b1b; border-radius:6px; margin:8px; }
+    .sub { font-size:12px; color:#9fb0c8; }
   </style>
 </head>
 <body>
-  <h2>VWAP Monitor — timeframe 15m — atualização a cada {{ update_interval }}s</h2>
+  <header>
+    <div>
+      <h2 style="margin:0">VWAP Monitor — 15m</h2>
+      <div class="sub">Atualiza a cada {{ update_interval }}s — símbolos: {{ symbols|join(", ") }}</div>
+    </div>
+    <div>
+      <small class="sub">Python backend | CryptoCompare</small>
+    </div>
+  </header>
+
   <div id="grid" class="grid"></div>
 
 <script>
-const symbols = {{ symbols|tojson }};
-const updateInterval = {{ update_interval }};
+const SYMBOLS = {{ symbols|tojson }};
+const UPDATE_INTERVAL = {{ update_interval }};
 
-function createCard(symbol) {
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.id = `card-${symbol}`;
-  card.innerHTML = `
+function mountCard(sym) {
+  const container = document.createElement('div');
+  container.className = 'card';
+  container.id = `card-${sym}`;
+  container.innerHTML = `
     <div class="card-header">
-      <div class="symbol">${symbol}</div>
-      <div id="signal-${symbol}" class="signal neutral">NEUTRAL</div>
+      <div class="symbol">${sym}</div>
+      <div id="sig-${sym}" class="signal neutral">NEUTRAL</div>
     </div>
-    <div id="plot-${symbol}" class="plot"></div>
+    <div id="plot-${sym}" class="plot"></div>
+    <div id="err-${sym}" style="display:none" class="error"></div>
   `;
-  return card;
+  return container;
+}
+
+async function fetchData() {
+  try {
+    const r = await fetch('/api/data');
+    const j = await r.json();
+    return j;
+  } catch (e) {
+    console.error("Fetch /api/data failed", e);
+    return null;
+  }
+}
+
+function drawCard(sym, entry) {
+  const plotEl = document.getElementById(`plot-${sym}`);
+  const sigEl = document.getElementById(`sig-${sym}`);
+  const errEl = document.getElementById(`err-${sym}`);
+  errEl.style.display = 'none';
+  errEl.textContent = '';
+
+  if (!entry || !entry.data || entry.data.length === 0) {
+    plotEl.innerHTML = '<div style="padding:12px;color:#9fb0c8">Sem dados — ver logs</div>';
+    sigEl.textContent = entry && entry.signal ? (entry.signal.signal || 'NEUTRAL') : 'NEUTRAL';
+    sigEl.className = `signal neutral`;
+    return;
+  }
+
+  const rows = entry.data;
+  const x = rows.map(r => new Date(r.datetime));
+  const open = rows.map(r => r.open);
+  const high = rows.map(r => r.high);
+  const low = rows.map(r => r.low);
+  const close = rows.map(r => r.close);
+  const vwap = rows.map(r => r.vwap);
+  const upper = rows.map(r => r.upper);
+  const lower = rows.map(r => r.lower);
+
+  // Candlestick trace
+  const candle = {
+    x: x,
+    open: open,
+    high: high,
+    low: low,
+    close: close,
+    type: 'candlestick',
+    increasing: { line: { color: '#06d6a0' } },
+    decreasing: { line: { color: '#ff6b6b' } },
+    name: 'candle'
+  };
+
+  const vwapTrace = { x: x, y: vwap, mode: 'lines', name: 'VWAP', line: { width: 1.6, dash: 'dash' }, hoverinfo: 'y+text' };
+  const upperTrace = { x: x, y: upper, mode: 'lines', name: 'Upper', line: { width: 0.6 }, hoverinfo: 'skip', showlegend:false };
+  const lowerTrace = { x: x, y: lower, mode: 'lines', name: 'Lower', line: { width: 0.6 }, hoverinfo: 'skip', showlegend:false };
+
+  const fill = {
+    x: [...x, ...x.slice().reverse()],
+    y: [...upper, ...lower.slice().reverse()],
+    fill: 'toself',
+    fillcolor: 'rgba(6,214,160,0.06)',
+    line: { width: 0 },
+    hoverinfo: 'skip',
+    showlegend: false
+  };
+
+  const data = [candle, fill, upperTrace, lowerTrace, vwapTrace];
+  const layout = {
+    margin: { t: 6, r: 6, l: 48, b: 30 },
+    xaxis: { rangeslider: { visible: false }, type: 'date' },
+    yaxis: { autorange: true, fixedrange: false },
+    plot_bgcolor: '#071017',
+    paper_bgcolor: '#071017',
+    showlegend: false,
+    font: { color: '#e6eef6' },
+  };
+
+  Plotly.react(plotEl, data, layout, { displayModeBar: false });
+
+  // signal
+  const signal = entry.signal && entry.signal.signal ? entry.signal.signal : 'NEUTRAL';
+  sigEl.textContent = signal;
+  sigEl.className = `signal ${ signal === 'SELL' ? 'sell' : signal === 'NEUTRAL' ? 'neutral' : '' }`;
+  // change border color
+  const card = document.getElementById(`card-${sym}`);
+  card.style.border = signal === 'BUY' ? '1px solid rgba(6,214,160,0.25)' : signal === 'SELL' ? '1px solid rgba(255,107,107,0.25)' : '1px solid rgba(255,255,255,0.03)';
+}
+
+async function refreshAll() {
+  const j = await fetchData();
+  if (!j) {
+    // show error on all cards
+    for (const sym of SYMBOLS) {
+      const errEl = document.getElementById(`err-${sym}`);
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = 'Falha ao conectar com /api/data';
+      }
+    }
+    return;
+  }
+  const results = j.results || {};
+  const errors = j.errors || {};
+  for (const sym of SYMBOLS) {
+    const entry = results[sym] || { data: [], signal: { signal: 'NEUTRAL' } };
+    if (errors && errors[sym]) {
+      const errEl = document.getElementById(`err-${sym}`);
+      errEl.style.display = 'block';
+      errEl.textContent = errors[sym];
+    }
+    drawCard(sym, entry);
+  }
 }
 
 function init() {
   const grid = document.getElementById('grid');
-  for (const s of symbols) {
-    grid.appendChild(createCard(s));
+  for (const sym of SYMBOLS) {
+    grid.appendChild(mountCard(sym));
   }
-  fetchAndUpdate();
-  setInterval(fetchAndUpdate, updateInterval * 1000);
+  // initial fetch
+  refreshAll();
+  // poll every UPDATE_INTERVAL seconds
+  setInterval(refreshAll, UPDATE_INTERVAL * 1000);
 }
 
-async function fetchAndUpdate(){
-  try {
-    const resp = await fetch('/api/data');
-    const json = await resp.json();
-    const results = json.results || {};
-    for (const symbol of symbols) {
-      const cardEl = document.getElementById(`card-${symbol}`);
-      const plotEl = document.getElementById(`plot-${symbol}`);
-      const signalEl = document.getElementById(`signal-${symbol}`);
-      const entry = results[symbol];
-      if (!entry || !entry.data || entry.data.length === 0) {
-        signalEl.textContent = "NO DATA";
-        signalEl.className = 'signal neutral';
-        plotEl.innerHTML = '<p style="padding:12px">Sem dados</p>';
-        continue;
-      }
-      const rows = entry.data;
-      // Build arrays
-      const x = rows.map(r => new Date(r.datetime));
-      const open = rows.map(r => r.open);
-      const high = rows.map(r => r.high);
-      const low = rows.map(r => r.low);
-      const close = rows.map(r => r.close);
-      const vwap = rows.map(r => r.vwap);
-      const upper = rows.map(r => r.upper);
-      const lower = rows.map(r => r.lower);
-
-      const candle = {
-        x: x,
-        open: open,
-        high: high,
-        low: low,
-        close: close,
-        increasing: {line: {color: '#06d6a0'}},
-        decreasing: {line: {color: '#ff6b6b'}},
-        type: 'candlestick',
-        xaxis: 'x',
-        yaxis: 'y',
-        name: symbol
-      };
-      const vwapTrace = { x: x, y: vwap, mode: 'lines', name: 'VWAP', line: {width:1.5, dash:'dash'} };
-      const upperTrace = { x: x, y: upper, mode: 'lines', name: 'Upper', line: {width:0.5}, hoverinfo: 'skip', showlegend:false };
-      const lowerTrace = { x: x, y: lower, mode: 'lines', name: 'Lower', line: {width:0.5}, hoverinfo: 'skip', showlegend:false };
-      const fill = {
-        x: [...x, ...x.slice().reverse()],
-        y: [...upper, ...lower.slice().reverse()],
-        fill: 'toself',
-        fillcolor: 'rgba(0,200,150,0.08)',
-        line: {width:0},
-        hoverinfo: 'skip',
-        showlegend: false
-      };
-
-      const data = [candle, fill, upperTrace, lowerTrace, vwapTrace];
-      const layout = {
-        margin: {t:8, r:6, l:40, b:30},
-        xaxis: { rangeslider: {visible: false}, type: 'date' },
-        yaxis: { autorange:true, fixedrange:false },
-        dragmode: 'pan',
-        showlegend: false,
-        plot_bgcolor: '#081219',
-        paper_bgcolor: '#081219',
-        font: { color: '#e6eef6' }
-      };
-      Plotly.react(plotEl, data, layout, {displayModeBar:false});
-
-      // Signal handling
-      const signal = entry.signal && entry.signal.signal ? entry.signal.signal : "NEUTRAL";
-      signalEl.textContent = signal;
-      signalEl.className = `signal ${ signal === 'BUY' ? '' : signal === 'SELL' ? 'sell' : 'neutral' }`;
-      // change card border color based on signal
-      cardEl.style.border = signal === 'BUY' ? '1px solid rgba(6,214,160,0.25)' : signal === 'SELL' ? '1px solid rgba(255,107,107,0.25)' : '1px solid rgba(255,255,255,0.03)';
-    }
-  } catch (err) {
-    console.error("Erro ao atualizar dados", err);
-  }
-}
-
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
