@@ -1,29 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard de Ativos</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 60%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; }
-    </style>
+    <title>VWAP Monitor</title>
+    <meta http-equiv="refresh" content="60"> <!-- atualiza a cada 1 minuto -->
 </head>
 <body>
-    <h2>Dashboard de Ativos</h2>
-    <table>
-        <tr>
-            <th>Ativo</th>
-            <th>Último Preço</th>
-            <th>VWAP</th>
-        </tr>
-        {% for name, values in data.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            <td>{{ values.last_price }}</td>
-            <td>{{ values.vwap }}</td>
-        </tr>
+    <h1>VWAP Monitor - Ativos</h1>
+
+    <h2>Binance (XAU, BTC, ETH)</h2>
+    <ul>
+        {% for sym, val in binance_data.items() %}
+        <li>{{ sym }}: {{ val.price }} @ {{ val.timestamp }}</li>
         {% endfor %}
-    </table>
+    </ul>
+
+    <h2>EUR/USD (AlphaVantage 15min)</h2>
+    <p>{{ eurusd_data.price }} @ {{ eurusd_data.timestamp }}</p>
 </body>
 </html>
