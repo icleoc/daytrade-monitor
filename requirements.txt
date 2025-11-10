@@ -2,7 +2,7 @@ flask==2.3.3
 pandas==2.3.3
 numpy==2.3.4
 requests==2.32.5
-binance==1.0.17
+python-binance==1.0.15
 flask
 requests
-python-binance
+
