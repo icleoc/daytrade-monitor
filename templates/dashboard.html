@@ -1,14 +1,20 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+<!doctype html>
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
-  <title>VWAP Monitor - Day Trade</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VWAP Monitor Day Trade</title>
+<link rel="stylesheet" href="/static/styles.css">
+<script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
 </head>
 <body>
-  <h1>Monitor VWAP - Dados Reais</h1>
-  <div id="cards" class="cards"></div>
-  <p class="update-info">Atualiza automaticamente a cada 30 segundos...</p>
-  <script src="/static/script.js"></script>
+<header>
+<h1>VWAP Monitor Day Trade</h1>
+<p id="subtitle">Atualiza automaticamente a cada <span id="interval-label">30</span>s</p>
+</header>
+<main id="cards-container">
+<!-- Cards are injected here -->
+</main>
+<script src="/static/script.js"></script>
 </body>
 </html>
