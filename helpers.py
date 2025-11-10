@@ -1,145 +1,69 @@
-# helpers.py
-import os
 import requests
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone
-from config import (
-    CRYPTOCOMPARE_BASE,
-    CRYPTOCOMPARE_API_KEY,
-    TIMEFRAME_MINUTES,
-    CANDLE_LIMIT,
-)
+import os
+from datetime import datetime
 
-HEADERS = {"authorization": f"Apikey {CRYPTOCOMPARE_API_KEY}"} if CRYPTOCOMPARE_API_KEY else {}
+from config import TIMEFRAME_MINUTES, CANDLE_LIMIT
 
-def _split_symbol(sym: str):
-    """
-    Given symbol like 'BTCUSD' -> returns ('BTC', 'USD')
-    Works for XAUUSD and EURUSD as well.
-    """
-    # Common FX/commodity symbols are 6 chars (EURUSD) or XAUUSD (5?), we assume last 3 are quote (USD)
-    base = sym[:-3]
-    quote = sym[-3:]
-    return base.upper(), quote.upper()
+CRYPTOCOMPARE_URL = "https://min-api.cryptocompare.com/data/v2/histominute"
+TWELVE_DATA_URL = "https://api.twelvedata.com/time_series"
+TWELVE_API_KEY = os.getenv("TWELVE_API_KEY", "34b1f0bac586484c97725bbbbddad099")  # coloque sua chave real
 
-def fetch_cryptocompare_candles(symbol: str, aggregate_minutes: int = TIMEFRAME_MINUTES, limit: int = CANDLE_LIMIT) -> pd.DataFrame:
-    """
-    Fetch candles using CryptoCompare histominute endpoint with aggregate.
-    Returns DataFrame with columns: datetime, open, high, low, close, volume
-    Raises RuntimeError on API error.
-    """
-    base, quote = _split_symbol(symbol)
-    url = f"{CRYPTOCOMPARE_BASE}/histominute"
-    params = {
-        "fsym": base,
-        "tsym": quote,
-        "aggregate": aggregate_minutes,
-        "limit": limit - 1,
-        "e": "CCCAGG"
-    }
-    resp = requests.get(url, params=params, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-    data = resp.json()
-    # CryptoCompare v2 returns structure: {"Response":"Success","Data": {"Aggregated": False, "TimeFrom": ..., "TimeTo": ..., "Data":[...]}}
-    if not data.get("Data") or "Data" not in data["Data"]:
-        # older/other responses: check Data directly
-        # attempt to parse both shapes
-        if "Data" in data and isinstance(data["Data"], list):
-            candles = data["Data"]
-        else:
-            raise RuntimeError(f"Unexpected CryptoCompare response for {symbol}: {data}")
+def fetch_candles(symbol, aggregate_minutes=TIMEFRAME_MINUTES, limit=CANDLE_LIMIT):
+    """Seleciona a fonte de dados automaticamente (cripto ou forex)"""
+    if symbol in ["BTCUSD", "ETHUSD", "SOLUSD"]:
+        return fetch_cryptocompare(symbol, aggregate_minutes, limit)
     else:
-        candles = data["Data"]["Data"]
+        return fetch_twelvedata(symbol, aggregate_minutes, limit)
 
-    if not candles:
-        raise RuntimeError(f"No candle data returned for {symbol}")
-
-    df = pd.DataFrame(candles)
-    # Ensure columns exist
-    if "time" not in df.columns:
-        raise RuntimeError(f"CryptoCompare returned unexpected structure for {symbol}: {data}")
-
-    df = df.rename(columns={"volumefrom": "volume", "time": "timestamp"})
-    df["datetime"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
-    # Keep essential columns and cast
-    df = df.loc[:, ["datetime", "open", "high", "low", "close", "volume"]].copy()
-    df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
-    df = df.sort_values("datetime").reset_index(drop=True)
+def fetch_cryptocompare(symbol, aggregate_minutes, limit):
+    url = f"{CRYPTOCOMPARE_URL}?fsym={symbol[:-3]}&tsym=USD&limit={limit}&aggregate={aggregate_minutes}"
+    r = requests.get(url)
+    data = r.json()
+    if data.get("Response") != "Success":
+        raise RuntimeError(f"Unexpected CryptoCompare response for {symbol}: {data}")
+    df = pd.DataFrame(data["Data"]["Data"])
+    df["datetime"] = pd.to_datetime(df["time"], unit="s")
     return df
 
-def compute_vwap_and_bands(df: pd.DataFrame, std_multiplier: float = 2.0) -> pd.DataFrame:
-    """
-    Compute VWAP (cumulative) and bands using rolling std of residuals.
-    Returns df with columns: datetime, open, high, low, close, volume, typ, vwap, upper, lower
-    """
-    df = df.copy()
-    # typical price
-    df["typ"] = (df["high"] + df["low"] + df["close"]) / 3.0
-    # cumulative sums
-    df["cum_tp_vol"] = (df["typ"] * df["volume"]).cumsum()
-    df["cum_vol"] = df["volume"].cumsum().replace(0, np.nan)
-    df["vwap"] = df["cum_tp_vol"] / df["cum_vol"]
-    df["residual"] = df["typ"] - df["vwap"]
-    # rolling std of residuals - window chosen as min(20, len//5) to adapt
-    window = min(20, max(1, len(df) // 5))
-    df["resid_std"] = df["residual"].rolling(window=window, min_periods=1).std().fillna(0)
-    df["upper"] = df["vwap"] + std_multiplier * df["resid_std"]
-    df["lower"] = df["vwap"] - std_multiplier * df["resid_std"]
+def fetch_twelvedata(symbol, aggregate_minutes, limit):
+    params = {
+        "symbol": symbol,
+        "interval": f"{aggregate_minutes}min",
+        "apikey": TWELVE_API_KEY,
+        "outputsize": limit
+    }
+    r = requests.get(TWELVE_DATA_URL, params=params)
+    data = r.json()
+    if "values" not in data:
+        raise RuntimeError(f"Unexpected TwelveData response for {symbol}: {data}")
+    df = pd.DataFrame(data["values"])
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df["open"] = df["open"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
+    df["close"] = df["close"].astype(float)
+    df["volumefrom"] = df["volume"].astype(float)
+    return df[::-1].reset_index(drop=True)
+
+def calculate_vwap(df):
+    df["vwap"] = (df["close"] * df["volumefrom"]).cumsum() / df["volumefrom"].cumsum()
     return df
 
-def compute_signal(df: pd.DataFrame) -> dict:
-    """
-    Compute BUY / SELL / NEUTRAL based on VWAP cross on candle close.
-    Checks previous closed candle vs its VWAP and last closed candle vs its VWAP.
-    Returns dict with keys: signal, reason, time
-    """
-    if df is None or len(df) < 2:
-        return {"signal": "NEUTRAL", "reason": "not enough data", "time": None}
-    prev = df.iloc[-2]
-    last = df.iloc[-1]
-    prev_close = prev["close"]
-    prev_vwap = prev["vwap"]
-    last_close = last["close"]
-    last_vwap = last["vwap"]
-
-    if (prev_close < prev_vwap) and (last_close > last_vwap):
-        return {"signal": "BUY", "reason": "close crossed above VWAP", "time": last["datetime"].isoformat()}
-    if (prev_close > prev_vwap) and (last_close < last_vwap):
-        return {"signal": "SELL", "reason": "close crossed below VWAP", "time": last["datetime"].isoformat()}
-    return {"signal": "NEUTRAL", "reason": "no cross", "time": last["datetime"].isoformat()}
-
-# High-level wrapper to fetch and compute
-def get_symbol_data(symbol: str):
-    """
-    Fetch candles, compute vwap/bands, compute signal.
-    Returns dict: { data: [records], signal: {...} }
-    In case of failure, raises or returns structured error.
-    """
+def get_symbol_data(symbol):
     try:
-        df = fetch_cryptocompare_candles(symbol, aggregate_minutes=TIMEFRAME_MINUTES, limit=CANDLE_LIMIT)
+        df = fetch_candles(symbol)
+        df = calculate_vwap(df)
+        last = df.iloc[-1]
+        return {
+            "symbol": symbol,
+            "price": float(last["close"]),
+            "vwap": float(last["vwap"]),
+            "timestamp": last["datetime"].isoformat(),
+            "trend": "bullish" if last["close"] > last["vwap"] else "bearish",
+            "df": df.tail(50).to_dict(orient="records")
+        }
     except Exception as e:
-        # bubble the error with context
-        raise RuntimeError(f"Error fetching candles for {symbol}: {e}")
-
-    if df.empty:
-        raise RuntimeError(f"No candles for {symbol}")
-
-    df2 = compute_vwap_and_bands(df, std_multiplier=float(os.getenv("BAND_STD_MULTIPLIER", 2.0)))
-    sig = compute_signal(df2)
-
-    # prepare last N records for frontend (limit to 200)
-    recs = []
-    for _, r in df2.tail(200).iterrows():
-        recs.append({
-            "datetime": r["datetime"].isoformat(),
-            "open": float(r["open"]),
-            "high": float(r["high"]),
-            "low": float(r["low"]),
-            "close": float(r["close"]),
-            "volume": float(r["volume"]),
-            "vwap": float(r["vwap"]),
-            "upper": float(r["upper"]),
-            "lower": float(r["lower"]),
-        })
-    return {"data": recs, "signal": sig}
+        print(f"[ERROR] {symbol}: {e}")
+        return {"symbol": symbol, "error": str(e)}
