@@ -1,9 +1,42 @@
-/* static/styles.css */
-body { font-family: Arial, sans-serif; background:#0f1722; color:#e6eef8; margin:0; padding:18px; }
-.container { max-width:1000px; margin:0 auto; }
-h1 { margin:0 0 10px 0; }
-.cards { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
-.card { background:#0b1220; padding:16px; border-radius:8px; min-width:160px; box-shadow:0 6px 18px rgba(0,0,0,0.6); }
-.value { font-size:20px; margin-top:6px; color:#7ee787; }
-.error { color:#ff8a8a; }
-.warning { color:#ffd27a; margin-bottom:6px; }
+body {
+  background: #0e1117;
+  color: #e0e0e0;
+  font-family: 'Arial', sans-serif;
+  text-align: center;
+  padding: 30px;
+}
+
+h1 {
+  color: #00ffcc;
+  margin-bottom: 30px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  justify-items: center;
+}
+
+.card {
+  background: #1a1d24;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 0 10px #00ffcc55;
+  transition: transform 0.3s;
+}
+
+.card:hover {
+  transform: scale(1.05);
+}
+
+.time {
+  font-size: 0.8em;
+  color: #aaa;
+}
+
+.update-info {
+  margin-top: 30px;
+  font-size: 0.9em;
+  color: #999;
+}
