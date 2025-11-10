@@ -2,6 +2,6 @@ Flask==2.3.3
 requests==2.32.5
 pandas==2.3.3
 numpy==2.3.4
-coinbase==2.1.1
-python-dateutil==2.9.0
-chart.js==4.4.0
+ccxt==3.0.88
+yfinance==0.2.28
+plotly==5.17.0
