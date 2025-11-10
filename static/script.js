@@ -1,28 +1,30 @@
 // static/script.js
 async function loadVWAP(){
-  try{
+  try {
     const res = await fetch('/api/vwap');
     const j = await res.json();
+    const assets = j.assets;
     const container = document.getElementById('cards');
     container.innerHTML = '';
-    j.assets.forEach(a => {
-      const card = document.createElement('div');
-      card.className = 'card';
-      if(a.error){
-        card.innerHTML = `<h3>${a.symbol}</h3><p class="error">${a.error}</p>`;
+    assets.forEach(a => {
+      let html;
+      if(a.error) {
+        html = `<div class="card"><h2>${a.symbol}</h2><p>Error: ${a.error}</p></div>`;
       } else {
-        card.innerHTML = `<h3>${a.symbol}</h3>
-          <p>${a.price !== null ? a.price.toFixed(4) : '-'}</p>
-          <small>VWAP: ${a.vwap !== null ? a.vwap.toFixed(4) : '-'}</small>
-          <p>Sinal: <b>${a.signal}</b></p>
-          <small>${a.timeframe}</small>`;
+        html = `<div class="card">
+                  <h2>${a.symbol}</h2>
+                  <p><strong>Preço:</strong> ${a.price}</p>
+                  <p><strong>VWAP:</strong> ${a.vwap}</p>
+                  <p><strong>Sinal:</strong> ${a.signal}</p>
+                  <p><small>TF: ${a.timeframe}</small></p>
+                </div>`;
       }
-      container.appendChild(card);
+      container.innerHTML += html;
     });
-  }catch(err){
-    console.error(err);
+  } catch(err) {
+    console.error('Erro ao carregar dados VWAP:', err);
   }
 }
 
-setInterval(loadVWAP, 5000);
 window.onload = loadVWAP;
+setInterval(loadVWAP, 5000);
