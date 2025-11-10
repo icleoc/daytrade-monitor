@@ -1,62 +1,142 @@
-const INTERVAL_SEC = 30; // default update
+const dashboard = document.getElementById('dashboard');
+const updateInterval = 15000; // 15s
 
-
-async function fetchJson(url){
-const res = await fetch(url);
-if(!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-return res.json();
+async function fetchData() {
+    const res = await fetch('/api/data');
+    const data = await res.json();
+    return data;
 }
 
+function createCard(asset) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = `card-${asset.ticker}`;
 
-function buildCardDom(key, data){
-const card = document.createElement('section');
-card.className = 'card ' + (data.signal && data.signal !== 'NEUTRAL' ? data.signal.toLowerCase() : 'neutral');
-card.id = `card-${key}`;
-card.innerHTML = `
-<h2>${key} <small style="font-weight:400">(${data.ticker || ''})</small></h2>
-<div class="price">Preço: <span class="price-val">${data.price ?? 'Sem dados'}</span></div>
-<div class="vwap">VWAP: <span class="vwap-val">${data.vwap ?? 'Sem dados'}</span></div>
-<div id="plot-${key}" class="plot"></div>
-<div class="footer-note">Sinal: <strong class="signal-val">${data.signal ?? 'NO_DATA'}</strong> — Atualizado: ${data.last_update ?? ''}</div>
-`;
-return card;
+    const title = document.createElement('h2');
+    title.textContent = asset.ticker;
+    card.appendChild(title);
+
+    const price = document.createElement('p');
+    price.textContent = `Preço: ${asset.price ?? 'Sem dados'}`;
+    card.appendChild(price);
+
+    const vwap = document.createElement('p');
+    vwap.textContent = `VWAP: ${asset.vwap ?? 'Sem dados'}`;
+    card.appendChild(vwap);
+
+    const signal = document.createElement('p');
+    signal.textContent = asset.signal ? `⚖️ ${asset.signal}` : 'Sem dados';
+    card.appendChild(signal);
+
+    const chartCanvas = document.createElement('canvas');
+    chartCanvas.id = `chart-${asset.ticker}`;
+    chartCanvas.height = 200;
+    card.appendChild(chartCanvas);
+
+    const updated = document.createElement('p');
+    updated.id = `updated-${asset.ticker}`;
+    updated.textContent = `Atualizado em: ${new Date().toLocaleTimeString()}`;
+    card.appendChild(updated);
+
+    dashboard.appendChild(card);
+    return chartCanvas;
 }
 
+function updateCard(asset) {
+    const card = document.getElementById(`card-${asset.ticker}`);
+    if (!card) return;
 
-async function updateDashboard(){
-try{
-const data = await fetchJson(`${API_BASE}/vwap`);
-const container = document.getElementById('cards-container');
-container.innerHTML = '';
-for(const key of Object.keys(data)){
-const item = data[key];
-const card = buildCardDom(key, item);
-container.appendChild(card);
-// request chart data and plot
-plotTicker(key, item.ticker);
-}
-}catch(e){
-console.error('updateDashboard error', e);
-}
+    card.style.backgroundColor = asset.signal === 'Compra' ? '#d4f8d4'
+        : asset.signal === 'Venda' ? '#f8d4d4' : '#f0f0f0';
+
+    document.getElementById(`updated-${asset.ticker}`).textContent =
+        `Atualizado em: ${new Date().toLocaleTimeString()}`;
 }
 
+// Cria e atualiza gráficos com Chart.js
+function renderChart(asset) {
+    const ctx = document.getElementById(`chart-${asset.ticker}`).getContext('2d');
 
-async function plotTicker(key, ticker){
-if(!ticker) return;
-try{
-const chart = await fetchJson(`${API_BASE}/chart/${encodeURIComponent(ticker)}?period=1d&interval=15m`);
-if(chart.error) return;
-const times = chart.times;
-const o = chart.open, h = chart.high, l = chart.low, c = chart.close;
-const vwap = chart.vwap, upper = chart.upper, lower = chart.lower;
-const signal = chart.signal;
-const traceCandles = {
-x: times, close: c, high: h, low: l, open: o,
-type: 'candlestick', name: 'Candles'
-};
-const traceVWAP = { x: times, y: vwap, type: 'scatter', mode: 'lines', name: 'VWAP', line: {width:2} };
-const traceUpper = { x: times, y: upper, type: 'scatter', mode: 'lines', name: 'Upper', fill: 'tonexty', visible: true, line: {width:0.5} };
-const traceLower = { x: times, y: lower, type: 'scatter', mode: 'lines', name: 'Lower', fill: 'tonexty', visible: true, line: {width:0.5} };
+    const candles = asset.candles.map(c => ({
+        x: new Date(c.time),
+        o: c.open,
+        h: c.high,
+        l: c.low,
+        c: c.close
+    }));
 
+    const vwapData = asset.vwapData.map(v => ({ x: new Date(v.time), y: v.value }));
+    const upperData = asset.upperBand.map(v => ({ x: new Date(v.time), y: v.value }));
+    const lowerData = asset.lowerBand.map(v => ({ x: new Date(v.time), y: v.value }));
 
-const data = [t
+    const signals = asset.signals.map(s => ({
+        x: new Date(s.time),
+        y: s.price,
+        type: s.type // 'Compra' ou 'Venda'
+    }));
+
+    if (ctx.chartInstance) ctx.chartInstance.destroy();
+
+    ctx.chartInstance = new Chart(ctx, {
+        type: 'candlestick',
+        data: {
+            datasets: [
+                {
+                    label: 'Candles',
+                    data: candles
+                },
+                {
+                    label: 'VWAP',
+                    data: vwapData,
+                    borderColor: 'blue',
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Upper Band',
+                    data: upperData,
+                    borderColor: 'rgba(0,0,255,0.2)',
+                    fill: '+1',
+                    pointRadius: 0
+                },
+                {
+                    label: 'Lower Band',
+                    data: lowerData,
+                    borderColor: 'rgba(0,0,255,0.2)',
+                    fill: '-1',
+                    pointRadius: 0
+                },
+                {
+                    label: 'Sinais',
+                    data: signals.map(s => ({ x: s.x, y: s.y })),
+                    backgroundColor: signals.map(s => s.type === 'Compra' ? 'green' : 'red'),
+                    type: 'bubble'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { type: 'time', time: { unit: 'minute' } },
+                y: { beginAtZero: false }
+            }
+        }
+    });
+}
+
+async function updateDashboard() {
+    const data = await fetchData();
+
+    for (const asset of data) {
+        if (!document.getElementById(`card-${asset.ticker}`)) createCard(asset);
+        updateCard(asset);
+        renderChart(asset);
+    }
+}
+
+updateDashboard();
+setInterval(updateDashboard, updateInterval);
