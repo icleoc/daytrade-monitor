@@ -1,20 +1,44 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>VWAP Monitor</title>
-    <meta http-equiv="refresh" content="60"> <!-- atualiza a cada 1 minuto -->
+    <meta charset="UTF-8">
+    <title>Dashboard de Ativos</title>
+    <meta http-equiv="refresh" content="60">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; }
+        h1 { text-align: center; }
+        table { width: 50%; margin: auto; border-collapse: collapse; }
+        th, td { padding: 12px; border: 1px solid #ccc; text-align: center; }
+        th { background-color: #f4f4f4; }
+    </style>
 </head>
 <body>
-    <h1>VWAP Monitor - Ativos</h1>
+    <h1>Dashboard de Ativos</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Ativo</th>
+                <th>Preço</th>
+            </tr>
+        </thead>
+        <tbody id="data-body">
+        </tbody>
+    </table>
 
-    <h2>Binance (XAU, BTC, ETH)</h2>
-    <ul>
-        {% for sym, val in binance_data.items() %}
-        <li>{{ sym }}: {{ val.price }} @ {{ val.timestamp }}</li>
-        {% endfor %}
-    </ul>
+    <script>
+        async function fetchData() {
+            const res = await fetch("/api/data");
+            const data = await res.json();
+            const tbody = document.getElementById("data-body");
+            tbody.innerHTML = "";
+            for (const [symbol, price] of Object.entries(data)) {
+                const row = `<tr><td>${symbol}</td><td>${price !== null ? price : 'Erro'}</td></tr>`;
+                tbody.innerHTML += row;
+            }
+        }
 
-    <h2>EUR/USD (AlphaVantage 15min)</h2>
-    <p>{{ eurusd_data.price }} @ {{ eurusd_data.timestamp }}</p>
+        fetchData();
+        setInterval(fetchData, 60000); // atualiza a cada minuto
+    </script>
 </body>
 </html>
