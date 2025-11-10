@@ -1,32 +1,28 @@
-const cardsRoot = document.getElementById('cards');
+async function atualizarVWAP() {
+    const response = await fetch("/api/vwap");
+    const data = await response.json();
+    const cardsDiv = document.getElementById("cards");
+    cardsDiv.innerHTML = "";
 
+    Object.keys(data).forEach(asset => {
+        const info = data[asset];
+        if (info.error) {
+            cardsDiv.innerHTML += `
+                <div class="card">
+                    <h2>${asset}</h2>
+                    <p>${info.error}</p>
+                </div>`;
+        } else {
+            cardsDiv.innerHTML += `
+                <div class="card">
+                    <h2>${asset}</h2>
+                    <p><strong>Preço:</strong> ${info.price}</p>
+                    <p><strong>VWAP:</strong> ${info.vwap}</p>
+                    <p class="${info.signal.toLowerCase()}"><strong>Sinal:</strong> ${info.signal}</p>
+                </div>`;
+        }
+    });
+}
 
-function renderSignals(signals) {
-cardsRoot.innerHTML = '';
-for (const name of Object.keys(signals)) {
-const s = signals[name];
-const card = document.createElement('div');
-card.className = 'card';
-
-
-const title = document.createElement('h2');
-title.textContent = name;
-card.appendChild(title);
-
-
-const price = document.createElement('p');
-price.innerHTML = `<strong>Preço:</strong> ${s.preco === null ? '-' : s.preco}`;
-card.appendChild(price);
-
-
-const vwap = document.createElement('p');
-vwap.innerHTML = `<strong>VWAP:</strong> ${s.vwap === null ? '-' : s.vwap}`;
-card.appendChild(vwap);
-
-
-const sinal = document.createElement('p');
-sinal.innerHTML = `<strong>Sinal:</strong> <span class="signal ${s.sinal}">${s.sinal}</span>`;
-card.appendChild(sinal);
-
-
-cardsRoot.appendChild(c
+setInterval(atualizarVWAP, 5000);
+window.onload = atualizarVWAP;
