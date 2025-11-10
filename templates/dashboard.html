@@ -2,34 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        h1 { margin-bottom: 20px; }
-        .price { font-size: 24px; margin: 10px 0; }
-    </style>
+    <title>Market Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <h1>Market Dashboard</h1>
-    <div class="price">BTC/USD: $<span id="btc">{{ prices['BTCUSD'] }}</span></div>
-    <div class="price">ETH/USD: $<span id="eth">{{ prices['ETHUSD'] }}</span></div>
-    <div class="price">XAU/USD: $<span id="xau">{{ prices['XAUUSD'] }}</span></div>
-    <div class="price">EUR/USD: $<span id="eur">{{ prices['EURUSD'] }}</span></div>
+    <div class="cards">
+        <div class="card" id="card-BTC">
+            <h2>BTC/USD</h2>
+            <p class="price">Loading...</p>
+            <p class="vwap">VWAP: --</p>
+        </div>
+        <div class="card" id="card-ETH">
+            <h2>ETH/USD</h2>
+            <p class="price">Loading...</p>
+            <p class="vwap">VWAP: --</p>
+        </div>
+        <div class="card" id="card-XAU">
+            <h2>XAU/USD</h2>
+            <p class="price">Loading...</p>
+            <p class="vwap">VWAP: --</p>
+        </div>
+        <div class="card" id="card-EUR">
+            <h2>EUR/USD</h2>
+            <p class="price">Loading...</p>
+            <p class="vwap">VWAP: --</p>
+        </div>
+    </div>
 
-    <script>
-        async function updatePrices() {
-            try {
-                const resp = await fetch("/api/prices");
-                const data = await resp.json();
-                document.getElementById("btc").innerText = data.BTCUSD.toFixed(2);
-                document.getElementById("eth").innerText = data.ETHUSD.toFixed(2);
-                document.getElementById("xau").innerText = data.XAUUSD.toFixed(2);
-                document.getElementById("eur").innerText = data.EURUSD.toFixed(4);
-            } catch (e) {
-                console.error("Erro ao atualizar preços:", e);
-            }
-        }
-        setInterval(updatePrices, 60000);
-    </script>
+    <canvas id="priceChart" width="800" height="400"></canvas>
+
+    <script src="/static/script.js"></script>
 </body>
 </html>
