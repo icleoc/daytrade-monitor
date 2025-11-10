@@ -1,46 +1,38 @@
-async function fetchData() {
-    const res = await fetch('/api/data');
-    const assets = await res.json();
-    renderDashboard(assets);
+async function fetchPrices() {
+    const res = await fetch('/api/prices');
+    const data = await res.json();
+    for (let symbol in data.prices) {
+        document.querySelector(`#card-${symbol} .price`).innerText = `$${data.prices[symbol].toFixed(2)}`;
+        document.querySelector(`#card-${symbol} .vwap`).innerText = `VWAP: ${data.vwap[symbol].toFixed(2)}`;
+    }
 }
 
-function renderDashboard(assets) {
-    const container = document.getElementById('dashboard');
-    container.innerHTML = '';
+async function fetchHistorical(symbol) {
+    const res = await fetch(`/api/historical/${symbol}`);
+    return await res.json();
+}
 
-    assets.forEach(asset => {
-        const card = document.createElement('div');
-        card.className = 'asset-card';
-        card.style.border = asset.signal === 'Compra' ? '2px solid green' : asset.signal === 'Venda' ? '2px solid red' : '1px solid #ccc';
+async function updateChart() {
+    const dataBTC = await fetchHistorical('BTC');
+    const ctx = document.getElementById('priceChart').getContext('2d');
 
-        const title = document.createElement('h2');
-        title.textContent = `${asset.ticker} - Preço: ${asset.price}`;
-        card.appendChild(title);
-
-        const canvas = document.createElement('canvas');
-        card.appendChild(canvas);
-
-        container.appendChild(card);
-
-        new Chart(canvas.getContext('2d'), {
-            type: 'candlestick',
-            data: {
-                datasets: [
-                    { label: 'Candles', data: asset.candles },
-                    { label: 'VWAP', type: 'line', data: asset.vwapData, borderColor: 'blue', borderWidth: 1, fill: false },
-                    { label: 'Upper Band', type: 'line', data: asset.upperBand, borderColor: 'rgba(0,0,255,0.2)', fill: '+1' },
-                    { label: 'Lower Band', type: 'line', data: asset.lowerBand, borderColor: 'rgba(0,0,255,0.2)', fill: '-1' },
-                    { label: 'Sinais', type: 'scatter', data: asset.signals.map(s => ({x:s.time, y:s.price})), backgroundColor: asset.signals.map(s => s.type==='Compra'?'green':'red') }
-                ]
-            },
-            options: {
-                plugins: { legend: { display: true } },
-                scales: { x: { type: 'time', time: { unit: 'minute' } } }
-            }
-        });
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dataBTC.map(d => d.time),
+            datasets: [{
+                label: 'BTC/USD',
+                data: dataBTC.map(d => d.price),
+                borderColor: 'rgba(75,192,192,1)',
+                fill: false
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
     });
 }
 
-// Atualiza a cada 15s
-fetchData();
-setInterval(fetchData, 15000);
+// Atualiza a cada minuto
+fetchPrices();
+updateChart();
+setInterval(fetchPrices, 60000);
+setInterval(updateChart, 60000);
