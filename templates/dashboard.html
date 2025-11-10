@@ -1,17 +1,17 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>VWAP Monitor</title>
-<link rel="stylesheet" href="/static/styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor VWAP - Day Trade</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script defer src="{{ url_for('static', filename='script.js') }}"></script>
 </head>
 <body>
-<div class="container">
-<h1>VWAP Monitor Day Trade</h1>
-<div id="cards" class="cards"></div>
-<div class="footer">Atualiza automaticamente — intervalo configurado no servidor.</div>
-</div>
-<script src="/static/script.js"></script>
+    <div class="container">
+        <h1>Monitor VWAP - Day Trade</h1>
+        <div id="cards"></div>
+        <p class="atualiza">Atualiza automaticamente a cada 5 segundos...</p>
+    </div>
 </body>
 </html>
