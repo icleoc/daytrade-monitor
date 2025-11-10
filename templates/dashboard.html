@@ -1,14 +1,76 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>VWAP Monitor</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
+    <title>Daytrade Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-    <div id="dashboard"></div>
-    <script src="/static/script.js"></script>
+    {% for symbol, asset in data.items() %}
+    <div style="border:1px solid #ccc; padding:10px; margin-bottom:15px;">
+        <h3>{{ symbol }}</h3>
+        <div id="chart-{{ loop.index0 }}" style="height:400px;"></div>
+        <script>
+            var df = {{ asset.df.to_json(orient='records')|safe }};
+            var signals = {{ asset.signals.to_json(orient='records')|safe }};
+
+            var trace_candles = {
+                x: df.map(r => r.index),
+                open: df.map(r => r.Open),
+                high: df.map(r => r.High),
+                low: df.map(r => r.Low),
+                close: df.map(r => r.Close),
+                type: 'candlestick',
+                name: 'Candles'
+            };
+
+            var trace_vwap = {
+                x: df.map(r => r.index),
+                y: df.map(r => r.vwap),
+                mode: 'lines',
+                line: {color: 'blue', width: 1},
+                name: 'VWAP'
+            };
+
+            var trace_upper = {
+                x: df.map(r => r.index),
+                y: df.map(r => r.vwap_upper),
+                fill: 'tonexty',
+                mode: 'lines',
+                line: {color:'rgba(0,0,255,0.2)'},
+                name:'Upper Band'
+            };
+
+            var trace_lower = {
+                x: df.map(r => r.index),
+                y: df.map(r => r.vwap_lower),
+                fill: 'tonexty',
+                mode: 'lines',
+                line: {color:'rgba(0,0,255,0.2)'},
+                name:'Lower Band'
+            };
+
+            var traces = [trace_candles, trace_lower, trace_upper, trace_vwap];
+
+            // sinais
+            signals.forEach(function(s){
+                traces.push({
+                    x:[s.datetime],
+                    y:[s.price],
+                    mode:'markers+text',
+                    marker:{
+                        symbol: s.signal=='buy'?'arrow-up':'arrow-down',
+                        color: s.signal=='buy'?'green':'red',
+                        size:16
+                    },
+                    text:[s.signal.charAt(0).toUpperCase() + s.signal.slice(1)],
+                    textposition: s.signal=='buy'?'top center':'bottom center',
+                    hovertemplate:'Preço: %{y}<br>Hora: %{x}<br>Operação: %{text}<extra></extra>'
+                });
+            });
+
+            Plotly.newPlot('chart-{{ loop.index0 }}', traces, {margin:{t:25}});
+        </script>
+    </div>
+    {% endfor %}
 </body>
 </html>
