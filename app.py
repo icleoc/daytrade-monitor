@@ -1,19 +1,13 @@
-from flask import Flask, render_template
-import monitor_vwap_real as monitor
+# app.py
 
-app = Flask(__name__)
+from flask import Flask, render_template
+from monitor_vwap_real import binance_data, eurusd_data
+
+app = Flask(__name__, template_folder="templates")  # pasta templates
 
 @app.route("/")
-def index():
-    data = {}
-    for asset, records in monitor.prices.items():
-        if isinstance(records, list) and records:
-            data[asset] = records[-1]  # último preço
-        elif isinstance(records, pd.DataFrame):
-            data[asset] = records.iloc[-1].to_dict()
-        else:
-            data[asset] = {"price": None, "time": None}
-    return render_template("index.html", data=data)
+def dashboard():
+    return render_template("dashboard.html", binance_data=binance_data, eurusd_data=eurusd_data)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
