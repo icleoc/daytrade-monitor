@@ -1,20 +1,24 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, jsonify, render_template
 from helpers import get_symbol_data
-from config import SYMBOLS, UPDATE_INTERVAL_SECONDS
+from config import SYMBOLS
 
 app = Flask(__name__)
 
-@app.route("/")
-def home():
-    return render_template("dashboard.html", symbols=SYMBOLS, update_interval=UPDATE_INTERVAL_SECONDS)
+@app.route('/')
+def index():
+    return render_template('index.html', symbols=SYMBOLS)
 
-@app.route("/api/data")
+@app.route('/api/data')
 def api_data():
     data = []
     for sym in SYMBOLS:
-        data_obj = get_symbol_data(sym)
-        data.append(data_obj)
+        symbol = sym["symbol"]
+        try:
+            data_obj = get_symbol_data(symbol)
+            data.append(data_obj)
+        except Exception as e:
+            print(f"[ERROR] {symbol}: {e}")
     return jsonify(data)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host='0.0.0.0', port=5000)
