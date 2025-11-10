@@ -1,37 +1,29 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Dashboard VWAP</title>
+    <title>Dashboard de Ativos</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 60%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+    </style>
 </head>
 <body>
-    <h1>Dashboard de Ativos</h1>
-
-    {% if df %}
-        {% for symbol, data in df.items() %}
-            <h2>{{ symbol }}</h2>
-            {% if not data.empty %}
-                <table border="1">
-                    <tr>
-                        {% for col in data.columns %}
-                            <th>{{ col }}</th>
-                        {% endfor %}
-                    </tr>
-                    {% for row in data.tail(5).itertuples() %}
-                        <tr>
-                            {% for val in row[1:] %}
-                                <td>{{ val }}</td>
-                            {% endfor %}
-                        </tr>
-                    {% endfor %}
-                </table>
-            {% else %}
-                <p>Sem dados disponíveis.</p>
-            {% endif %}
+    <h2>Dashboard de Ativos</h2>
+    <table>
+        <tr>
+            <th>Ativo</th>
+            <th>Último Preço</th>
+            <th>VWAP</th>
+        </tr>
+        {% for name, values in data.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ values.last_price }}</td>
+            <td>{{ values.vwap }}</td>
+        </tr>
         {% endfor %}
-    {% else %}
-        <p>Não há dados para exibir.</p>
-    {% endif %}
-
+    </table>
 </body>
 </html>
