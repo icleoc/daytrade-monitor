@@ -1,38 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Market Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<title>Market Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+body { font-family: Arial, sans-serif; background: #f0f0f0; }
+.container { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 20px; }
+.card { background: white; border-radius: 10px; padding: 20px; margin: 10px; width: 200px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);}
+.signal-buy { color: green; font-weight: bold; }
+.signal-sell { color: red; font-weight: bold; }
+#chart { width: 80%; margin: 0 auto; height: 400px; }
+</style>
 </head>
 <body>
-    <h1>Market Dashboard</h1>
-    <div class="cards">
-        <div class="card" id="card-BTC">
-            <h2>BTC/USD</h2>
-            <p class="price">Loading...</p>
-            <p class="vwap">VWAP: --</p>
-        </div>
-        <div class="card" id="card-ETH">
-            <h2>ETH/USD</h2>
-            <p class="price">Loading...</p>
-            <p class="vwap">VWAP: --</p>
-        </div>
-        <div class="card" id="card-XAU">
-            <h2>XAU/USD</h2>
-            <p class="price">Loading...</p>
-            <p class="vwap">VWAP: --</p>
-        </div>
-        <div class="card" id="card-EUR">
-            <h2>EUR/USD</h2>
-            <p class="price">Loading...</p>
-            <p class="vwap">VWAP: --</p>
-        </div>
-    </div>
+<h1 style="text-align:center;">Market Dashboard</h1>
+<div class="container" id="cards"></div>
+<h2 style="text-align:center;">VWAP: <span id="vwap"></span></h2>
+<div id="chart"></div>
 
-    <canvas id="priceChart" width="800" height="400"></canvas>
+<script>
+async function fetchData() {
+    const res = await fetch('/api/data');
+    const data = await res.json();
+    
+    const container = document.getElementById('cards');
+    container.innerHTML = '';
+    
+    for (const [symbol, price] of Object.entries(data.prices)) {
+        const signal = data.signals[symbol];
+        const signalClass = signal === 'BUY' ? 'signal-buy' : 'signal-sell';
+        container.innerHTML += `
+            <div class="card">
+                <h3>${symbol}</h3>
+                <p>Price: $${price.toFixed(2)}</p>
+                <p class="${signalClass}">${signal}</p>
+            </div>
+        `;
+    }
+    
+    document.getElementById('vwap').textContent = data.vwap;
+    
+    // Atualizar gráfico
+    const chartData = [{
+        x: Object.keys(data.prices),
+        y: Object.values(data.prices),
+        type: 'bar',
+        marker: {color: 'orange'}
+    }];
+    Plotly.newPlot('chart', chartData);
+}
 
-    <script src="/static/script.js"></script>
+fetchData();
+setInterval(fetchData, 60000); // atualizar a cada minuto
+</script>
 </body>
 </html>
