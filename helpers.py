@@ -24,7 +24,7 @@ def get_symbol_data(symbol: str, timeframe: str = "1h"):
     """
     symbol = symbol.upper()
     if symbol in ["BTCUSD", "ETHUSD"]:
-        return get_from_binance(symbol, timeframe)
+        return url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={timeframe}&limit=100"
     elif symbol in ["EURUSD", "XAUUSD"]:
         return get_from_twelve_data(symbol, timeframe)
     else:
@@ -34,7 +34,7 @@ def get_symbol_data(symbol: str, timeframe: str = "1h"):
 # ========================
 # Binance
 # ========================
-def get_from_binance(symbol: str, interval: str):
+def url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={timeframe}&limit=100":
     pair = symbol.replace("USD", "USDT")
     params = {"symbol": pair, "interval": interval, "limit": 100}
 
