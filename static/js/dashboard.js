@@ -23,39 +23,36 @@ async function loadData() {
 
             const labels = candles.map(c => c.timestamp);
             const closes = candles.map(c => c.close);
-            const opens = candles.map(c => c.open);
-
-            // Último candle = ponto de entrada (plotando sinal)
-            const lastIndex = closes.length - 1;
-            const signalData = new Array(closes.length).fill(null);
-            signalData[lastIndex] = closes[lastIndex];
+            const signal = new Array(closes.length).fill(null);
+            signal[closes.length - 1] = closes[closes.length - 1];
 
             new Chart(canvas, {
                 type: 'line',
                 data: {
-                    labels: labels,
+                    labels,
                     datasets: [
                         {
-                            label: "Fechamento",
+                            label: "Preço Fechamento",
                             data: closes,
-                            borderColor: "#f00",
+                            borderColor: "#ff4747",
                             borderWidth: 2,
                             tension: 0.3
                         },
                         {
-                            label: "Sinal Entrada",
-                            data: signalData,
-                            borderColor: "#0f0",
-                            pointRadius: 8,
+                            label: "Sinal de Entrada",
+                            data: signal,
+                            borderColor: "#00ff00",
+                            pointRadius: 7,
+                            pointBackgroundColor: "#00ff00",
                             showLine: false
                         }
                     ]
                 },
                 options: {
-                    plugins: { legend: { display: true } },
+                    plugins: { legend: { labels: { color: "#fff" } } },
                     scales: {
                         x: { display: false },
-                        y: { display: true }
+                        y: { ticks: { color: "#fff" } }
                     }
                 }
             });
