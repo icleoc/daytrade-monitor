@@ -5,9 +5,5 @@ SYMBOLS = [
     {"symbol": "XAUUSD", "name": "Ouro"},
 ]
 
-# Configurações gerais
-CANDLE_LIMIT = 120
-TIMEFRAME_MINUTES = 15
-
 
 
