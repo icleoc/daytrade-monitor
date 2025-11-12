@@ -1,22 +1,18 @@
-from flask import Flask, jsonify, render_template, request
-import helpers
+import logging
+from flask import Flask, render_template, jsonify
+from helpers import get_all_assets_data
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-@app.route("/")
-def dashboard():
-    return render_template("dashboard.html")
+@app.route('/')
+def index():
+    return render_template('dashboard.html')
 
-@app.route("/api/data")
-def api_data():
-    try:
-        symbol = request.args.get("symbol", "BTCUSDT")
-        timeframe = request.args.get("timeframe", "1h")
-        data_obj = helpers.get_symbol_data(symbol, timeframe)
-        return jsonify({"symbol": symbol, "timeframe": timeframe, "data": data_obj})
-    except Exception as e:
-        app.logger.error(f"Erro ao buscar dados: {e}")
-        return jsonify({"error": str(e)}), 500
+@app.route('/api/data')
+def get_data():
+    data = get_all_assets_data()
+    return jsonify(data)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
