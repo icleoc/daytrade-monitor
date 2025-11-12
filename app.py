@@ -6,11 +6,11 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 @app.route('/')
-def index():
+def dashboard():
     return render_template('dashboard.html')
 
 @app.route('/api/data')
-def get_data():
+def api_data():
     data = get_all_assets_data()
     return jsonify(data)
 
