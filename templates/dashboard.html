@@ -2,53 +2,26 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VWAP Monitor</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-        body { background: #111; color: #eee; font-family: Arial; text-align: center; }
-        .chart { width: 95%; margin: 20px auto; }
-        .error { color: #f55; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </head>
 <body>
-    <h1>📊 VWAP Monitor</h1>
-    <div id="charts"></div>
+    <header>
+        <h1>VWAP Monitor - Mercado</h1>
+    </header>
 
-    <script>
-        const symbols = {{ symbols | tojson }};
-        const updateInterval = {{ update_interval }};
-
-        async function updateCharts() {
-            const res = await fetch('/api/data');
-            const data = await res.json();
-            const charts = document.getElementById('charts');
-            charts.innerHTML = '';
-            data.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'chart';
-                if (item.error) {
-                    div.innerHTML = `<h3>${item.symbol}</h3><p class="error">${item.error}</p>`;
-                } else {
-                    const tracePrice = {
-                        x: item.df.map(x => x.datetime),
-                        y: item.df.map(x => x.close),
-                        mode: 'lines',
-                        name: 'Preço'
-                    };
-                    const traceVWAP = {
-                        x: item.df.map(x => x.datetime),
-                        y: item.df.map(x => x.vwap),
-                        mode: 'lines',
-                        name: 'VWAP'
-                    };
-                    Plotly.newPlot(div, [tracePrice, traceVWAP], { title: item.symbol, template: 'plotly_dark' });
-                }
-                charts.appendChild(div);
-            });
-        }
-
-        updateCharts();
-        setInterval(updateCharts, updateInterval * 1000);
-    </script>
+    <main id="cards-container">
+        {% for sym in symbols %}
+        <div class="card" id="{{ sym.symbol }}">
+            <h2>{{ sym.name }}</h2>
+            <p>Preço: <span class="price">Carregando...</span></p>
+            <p>VWAP: <span class="vwap">Carregando...</span></p>
+            <p>Sinal: <span class="signal">Carregando...</span></p>
+            <canvas class="chart"></canvas>
+        </div>
+        {% endfor %}
+    </main>
 </body>
 </html>
