@@ -12,12 +12,11 @@ def dashboard():
 def api_data():
     data = []
     for sym in SYMBOLS:
-        symbol = sym["symbol"]
         try:
-            data_obj = get_symbol_data(symbol)
-            data.append(data_obj)
+            info = get_symbol_data(sym["symbol"])
+            data.append(info)
         except Exception as e:
-            print(f"[ERROR] {symbol}: {e}")
+            print(f"[ERROR] {sym['symbol']}: {e}")
     return jsonify(data)
 
 if __name__ == "__main__":
