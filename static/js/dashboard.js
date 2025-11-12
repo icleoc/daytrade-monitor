@@ -1,70 +1,69 @@
 async function loadData() {
     try {
-        const res = await fetch('/api/data');
+        const res = await fetch("/api/data");
         const data = await res.json();
 
-        data.forEach(asset => {
-            const card = document.getElementById(asset.symbol);
-            if (!card) return;
+        const container = document.getElementById("dashboard");
+        container.innerHTML = "";
 
-            card.querySelector('.price').textContent = asset.price;
-            card.querySelector('.vwap').textContent = asset.vwap;
+        for (const [symbol, candles] of Object.entries(data)) {
+            if (!candles || candles.length === 0) continue;
 
-            const signalEl = card.querySelector('.signal');
-            signalEl.textContent = asset.signal.toUpperCase();
-            signalEl.style.color = asset.signal === 'buy' ? 'lime' :
-                                   asset.signal === 'sell' ? 'red' : 'gray';
+            const card = document.createElement("div");
+            card.className = "card";
 
-            // Plot do gráfico
-            const chartData = asset.chart;
-            const times = chartData.map(c => c.Datetime);
-            const open = chartData.map(c => c.Open);
-            const high = chartData.map(c => c.High);
-            const low = chartData.map(c => c.Low);
-            const close = chartData.map(c => c.Close);
-            const vwap = chartData.map(c => c.vwap);
+            const title = document.createElement("h2");
+            title.textContent = symbol;
+            card.appendChild(title);
 
-            const lastSignalIndex = chartData.length - 1;
-            const signalMarker = {
-                x: [times[lastSignalIndex]],
-                y: [close[lastSignalIndex]],
-                mode: "markers+text",
-                text: asset.signal === "buy" ? "↑" : asset.signal === "sell" ? "↓" : "",
-                textposition: "top center",
-                textfont: { color: asset.signal === "buy" ? "lime" : "red", size: 20 },
-                marker: { size: 0 }
-            };
+            const canvas = document.createElement("canvas");
+            card.appendChild(canvas);
 
-            const traceCandles = {
-                x: times,
-                open, high, low, close,
-                type: "candlestick",
-                name: asset.symbol,
-            };
+            container.appendChild(card);
 
-            const traceVWAP = {
-                x: times,
-                y: vwap,
-                mode: "lines",
-                line: { color: "orange", width: 1.5 },
-                name: "VWAP"
-            };
+            const labels = candles.map(c => c.timestamp);
+            const closes = candles.map(c => c.close);
+            const opens = candles.map(c => c.open);
 
-            const layout = {
-                paper_bgcolor: "#1e1e1e",
-                plot_bgcolor: "#1e1e1e",
-                font: { color: "#fff" },
-                margin: { t: 10, b: 20, l: 30, r: 10 },
-                xaxis: { showgrid: false },
-                yaxis: { showgrid: true, gridcolor: "#333" },
-            };
+            // Último candle = ponto de entrada (plotando sinal)
+            const lastIndex = closes.length - 1;
+            const signalData = new Array(closes.length).fill(null);
+            signalData[lastIndex] = closes[lastIndex];
 
-            Plotly.newPlot(`chart-${asset.symbol}`, [traceCandles, traceVWAP, signalMarker], layout, {displayModeBar: false});
-        });
-    } catch (e) {
-        console.error("Erro ao carregar dados:", e);
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Fechamento",
+                            data: closes,
+                            borderColor: "#f00",
+                            borderWidth: 2,
+                            tension: 0.3
+                        },
+                        {
+                            label: "Sinal Entrada",
+                            data: signalData,
+                            borderColor: "#0f0",
+                            pointRadius: 8,
+                            showLine: false
+                        }
+                    ]
+                },
+                options: {
+                    plugins: { legend: { display: true } },
+                    scales: {
+                        x: { display: false },
+                        y: { display: true }
+                    }
+                }
+            });
+        }
+    } catch (err) {
+        console.error("Erro ao carregar dados:", err);
     }
 }
 
 loadData();
-setInterval(loadData, 60000); // Atualiza a cada 1 minuto
+setInterval(loadData, 60000);
