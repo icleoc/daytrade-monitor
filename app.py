@@ -11,7 +11,7 @@ def dashboard():
 def api_data():
     try:
         symbol = request.args.get("symbol", "BTCUSDT")
-        timeframe = request.args.get("timeframe", "1h")  # default
+        timeframe = request.args.get("timeframe", "1h")
         data_obj = helpers.get_symbol_data(symbol, timeframe)
         return jsonify({"symbol": symbol, "timeframe": timeframe, "data": data_obj})
     except Exception as e:
