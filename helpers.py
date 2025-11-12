@@ -1,84 +1,50 @@
-import requests
-import os
 import logging
+from binance.client import Client
+import os
+from datetime import datetime
+import pandas as pd
 
-# Endpoints
-BINANCE_URL = "https://api.binance.us/api/v3/klines"
-TWELVE_URL = "https://api.twelvedata.com/time_series"
-TWELVE_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
-
-# Log básico
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_symbol_data(symbol: str, timeframe: str):
-    """
-    Obtém dados de candles, priorizando Binance e caindo para Twelve Data se necessário.
-    """
+# ---- API KEYS (já configuradas no Render) ----
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
+BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
+
+client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+
+# ---- Lista de ativos ----
+ASSETS = {
+    "BTCUSD": "BTCUSDT",
+    "ETHUSD": "ETHUSDT",
+    "EURUSD": "EURUSDT",
+    "XAUUSD": "XAUUSDT"
+}
+
+def get_asset_data(symbol: str, interval='1h', limit=100):
+    """Obtém candles de um ativo na Binance"""
     try:
-        logger.info(f"🔹 Buscando {symbol} ({timeframe}) na Binance...")
-        return get_from_binance(symbol, timeframe)
+        logger.info(f"🔹 Buscando {symbol} ({interval}) na Binance...")
+        klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+        data = []
+        for k in klines:
+            data.append({
+                "timestamp": datetime.fromtimestamp(k[0]/1000).strftime('%Y-%m-%d %H:%M'),
+                "open": float(k[1]),
+                "high": float(k[2]),
+                "low": float(k[3]),
+                "close": float(k[4]),
+                "volume": float(k[5])
+            })
+        logger.info(f"✅ Binance retornou {len(data)} candles para {symbol}")
+        return data
     except Exception as e:
-        logger.warning(f"⚠️ Binance falhou ({e}), tentando Twelve Data...")
-        return get_from_twelvedata(symbol, timeframe)
+        logger.error(f"❌ Erro ao buscar {symbol}: {e}")
+        return []
 
-def get_from_binance(symbol: str, timeframe: str):
-    """
-    Busca candles de criptomoedas na Binance.
-    """
-    params = {
-        "symbol": symbol,
-        "interval": timeframe,
-        "limit": 100
-    }
-
-    response = requests.get(BINANCE_URL, params=params, timeout=10)
-    response.raise_for_status()
-
-    data = response.json()
-    candles = []
-
-    for c in data:
-        candles.append({
-            "time": c[0],
-            "open": float(c[1]),
-            "high": float(c[2]),
-            "low": float(c[3]),
-            "close": float(c[4]),
-            "volume": float(c[5]),
-        })
-
-    logger.info(f"✅ Binance retornou {len(candles)} candles para {symbol}")
-    return candles
-
-def get_from_twelvedata(symbol: str, interval: str):
-    """
-    Busca candles na Twelve Data (fallback).
-    """
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "apikey": TWELVE_API_KEY,
-        "outputsize": 100
-    }
-
-    response = requests.get(TWELVE_URL, params=params, timeout=10)
-    response.raise_for_status()
-    data = response.json()
-
-    if "values" not in data:
-        raise ValueError(f"Twelve Data retornou erro: {data}")
-
-    candles = []
-    for c in data["values"]:
-        candles.append({
-            "time": c["datetime"],
-            "open": float(c["open"]),
-            "high": float(c["high"]),
-            "low": float(c["low"]),
-            "close": float(c["close"]),
-            "volume": float(c.get("volume", 0)),
-        })
-
-    logger.info(f"✅ Twelve Data retornou {len(candles)} candles para {symbol}")
-    return candles
+def get_all_assets_data():
+    """Coleta dados de todos os ativos"""
+    all_data = {}
+    for name, pair in ASSETS.items():
+        all_data[name] = get_asset_data(pair)
+    return all_data
