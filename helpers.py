@@ -2,16 +2,18 @@ import requests
 import os
 import logging
 
+# Endpoints
 BINANCE_URL = "https://api.binance.us/api/v3/klines"
 TWELVE_URL = "https://api.twelvedata.com/time_series"
 TWELVE_API_KEY = os.getenv("TWELVE_DATA_API_KEY")
 
+# Log básico
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_symbol_data(symbol: str, timeframe: str):
     """
-    Tenta obter dados da Binance; se falhar, usa Twelve Data automaticamente.
+    Obtém dados de candles, priorizando Binance e caindo para Twelve Data se necessário.
     """
     try:
         logger.info(f"🔹 Buscando {symbol} ({timeframe}) na Binance...")
@@ -22,7 +24,7 @@ def get_symbol_data(symbol: str, timeframe: str):
 
 def get_from_binance(symbol: str, timeframe: str):
     """
-    Busca candles da Binance (cripto).
+    Busca candles de criptomoedas na Binance.
     """
     params = {
         "symbol": symbol,
@@ -51,7 +53,7 @@ def get_from_binance(symbol: str, timeframe: str):
 
 def get_from_twelvedata(symbol: str, interval: str):
     """
-    Busca candles da Twelve Data.
+    Busca candles na Twelve Data (fallback).
     """
     params = {
         "symbol": symbol,
@@ -62,4 +64,21 @@ def get_from_twelvedata(symbol: str, interval: str):
 
     response = requests.get(TWELVE_URL, params=params, timeout=10)
     response.raise_for_status()
-    data = response.
+    data = response.json()
+
+    if "values" not in data:
+        raise ValueError(f"Twelve Data retornou erro: {data}")
+
+    candles = []
+    for c in data["values"]:
+        candles.append({
+            "time": c["datetime"],
+            "open": float(c["open"]),
+            "high": float(c["high"]),
+            "low": float(c["low"]),
+            "close": float(c["close"]),
+            "volume": float(c.get("volume", 0)),
+        })
+
+    logger.info(f"✅ Twelve Data retornou {len(candles)} candles para {symbol}")
+    return candles
