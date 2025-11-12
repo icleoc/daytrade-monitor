@@ -1,28 +1,15 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VWAP Monitor</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
-  <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <meta charset="UTF-8">
+    <title>VWAP Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <header>
-    <h1>VWAP Monitor - 15m</h1>
-  </header>
+    <h1>📊 Monitor VWAP - Binance</h1>
+    <div class="dashboard-container" id="dashboard"></div>
 
-  <main id="cards-container">
-    {% for sym in symbols %}
-    <div class="card" id="{{ sym.symbol }}">
-      <h2>{{ sym.name }}</h2>
-      <p>Preço: <span class="price">--</span></p>
-      <p>VWAP: <span class="vwap">--</span></p>
-      <p>Sinal: <span class="signal">--</span></p>
-      <div id="chart-{{ sym.symbol }}" class="chart"></div>
-    </div>
-    {% endfor %}
-  </main>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
