@@ -1,29 +1,22 @@
-# app.py
-from flask import Flask, render_template, jsonify
-from config import SYMBOLS, UPDATE_INTERVAL_SECONDS
-
-# Import deve vir após config, e precisamos importar a função explicitamente
+from flask import Flask, jsonify, render_template, request
 import helpers
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(__name__)
 
 @app.route("/")
-def index():
-    symbols = [s["symbol"] for s in SYMBOLS]
-    return render_template("dashboard.html", symbols=symbols, update_interval=UPDATE_INTERVAL_SECONDS)
+def dashboard():
+    return render_template("dashboard.html")
 
 @app.route("/api/data")
 def api_data():
-    payload = []
-    for s in SYMBOLS:
-        sym = s["symbol"]
-        td = s.get("td_symbol", sym)
-        data_obj = helpers.get_symbol_data(sym, td)
-        if data_obj is not None:
-            payload.append(data_obj)
-        else:
-            payload.append({"symbol": sym, "error": "no_data"})
-    return jsonify(payload)
+    try:
+        symbol = request.args.get("symbol", "BTCUSDT")
+        timeframe = request.args.get("timeframe", "1h")  # default
+        data_obj = helpers.get_symbol_data(symbol, timeframe)
+        return jsonify({"symbol": symbol, "timeframe": timeframe, "data": data_obj})
+    except Exception as e:
+        app.logger.error(f"Erro ao buscar dados: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
