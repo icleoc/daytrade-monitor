@@ -1,27 +1,28 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VWAP Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VWAP Monitor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </head>
 <body>
-    <header>
-        <h1>VWAP Monitor - Mercado</h1>
-    </header>
+  <header>
+    <h1>VWAP Monitor - 15m</h1>
+  </header>
 
-    <main id="cards-container">
-        {% for sym in symbols %}
-        <div class="card" id="{{ sym.symbol }}">
-            <h2>{{ sym.name }}</h2>
-            <p>Preço: <span class="price">Carregando...</span></p>
-            <p>VWAP: <span class="vwap">Carregando...</span></p>
-            <p>Sinal: <span class="signal">Carregando...</span></p>
-            <canvas class="chart"></canvas>
-        </div>
-        {% endfor %}
-    </main>
+  <main id="cards-container">
+    {% for sym in symbols %}
+    <div class="card" id="{{ sym.symbol }}">
+      <h2>{{ sym.name }}</h2>
+      <p>Preço: <span class="price">--</span></p>
+      <p>VWAP: <span class="vwap">--</span></p>
+      <p>Sinal: <span class="signal">--</span></p>
+      <div id="chart-{{ sym.symbol }}" class="chart"></div>
+    </div>
+    {% endfor %}
+  </main>
 </body>
 </html>
