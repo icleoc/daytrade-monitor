@@ -1,29 +1,54 @@
-import yfinance as yf
+import requests
 import pandas as pd
-import numpy as np
+import os
 
-def get_symbol_data(symbol):
-    mapping = {
-        "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD",
-        "EURUSD": "EURUSD=X",
-        "XAUUSD": "XAUUSD=X"
-    }
+API_KEY = os.getenv("TWELVE_API_KEY")
 
-    ticker = mapping.get(symbol, symbol)
-    data = yf.download(ticker, period="1d", interval="15m")
-    if data.empty:
-        raise ValueError(f"Sem dados para {symbol}")
-
-    data["vwap"] = (data["Volume"] * (data["High"] + data["Low"] + data["Close"]) / 3).cumsum() / data["Volume"].cumsum()
-    data["signal"] = np.where(data["Close"] > data["vwap"], "buy",
-                       np.where(data["Close"] < data["vwap"], "sell", "hold"))
-
-    latest = data.iloc[-1]
-    return {
+def get_twelvedata(symbol):
+    url = f"https://api.twelvedata.com/time_series"
+    params = {
         "symbol": symbol,
-        "price": round(latest["Close"], 2),
-        "vwap": round(latest["vwap"], 2),
-        "signal": latest["signal"],
-        "chart": data.tail(100).reset_index().to_dict(orient="records")
+        "interval": "1min",
+        "outputsize": 100,
+        "apikey": API_KEY
     }
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if "values" not in data:
+        print(f"[ERROR] {symbol}: Sem dados válidos. Resposta:", data)
+        return None
+
+    df = pd.DataFrame(data["values"])
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df = df.sort_values("datetime")
+    df["open"] = df["open"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
+    df["close"] = df["close"].astype(float)
+    df["volume"] = df["volume"].astype(float)
+    return df
+
+
+def calculate_vwap(df):
+    if df is None or df.empty:
+        return None
+    df["vwap"] = (df["volume"] * (df["high"] + df["low"] + df["close"]) / 3).cumsum() / df["volume"].cumsum()
+    return df
+
+
+def get_all_assets():
+    assets = {
+        "BTCUSD": "BTC/USD",
+        "ETHUSD": "ETH/USD",
+        "EURUSD": "EUR/USD",
+        "XAUUSD": "XAU/USD"
+    }
+
+    results = {}
+    for symbol, name in assets.items():
+        df = get_twelvedata(symbol)
+        df = calculate_vwap(df)
+        if df is not None:
+            results[symbol] = df
+    return results
