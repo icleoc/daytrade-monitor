@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, render_template
-from helpers import get_symbol_data
+from helpers import get_all_assets
 from config import SYMBOLS
 
 app = Flask(__name__)
