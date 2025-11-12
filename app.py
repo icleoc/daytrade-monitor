@@ -5,8 +5,8 @@ from config import SYMBOLS
 app = Flask(__name__)
 
 @app.route('/')
-def index():
-    return render_template('index.html', symbols=SYMBOLS)
+def dashboard():
+    return render_template('dashboard.html', symbols=SYMBOLS)
 
 @app.route('/api/data')
 def api_data():
