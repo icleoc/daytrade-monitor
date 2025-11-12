@@ -1,54 +1,82 @@
 import requests
 import pandas as pd
 import os
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
-API_KEY = os.getenv("TWELVE_API_KEY")
+load_dotenv()
 
-def get_twelvedata(symbol):
-    url = f"https://api.twelvedata.com/time_series"
+# ========================
+# Configuração das APIs
+# ========================
+BINANCE_BASE_URL = "https://api.binance.com/api/v3/klines"
+TWELVE_BASE_URL = "https://api.twelvedata.com/time_series"
+
+TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
+
+# ========================
+# Função principal: get_symbol_data
+# ========================
+def get_symbol_data(symbol: str, timeframe: str = "1h"):
+    """
+    Retorna dados do ativo (DataFrame) com OHLC e VWAP calculado.
+    A origem é Binance para criptoativos e TwelveData para forex/metais.
+    """
+    symbol = symbol.upper()
+    if symbol in ["BTCUSD", "ETHUSD"]:
+        return get_from_binance(symbol, timeframe)
+    elif symbol in ["EURUSD", "XAUUSD"]:
+        return get_from_twelve_data(symbol, timeframe)
+    else:
+        raise ValueError(f"Ativo {symbol} não suportado.")
+
+
+# ========================
+# Binance
+# ========================
+def get_from_binance(symbol: str, interval: str):
+    pair = symbol.replace("USD", "USDT")
+    params = {"symbol": pair, "interval": interval, "limit": 100}
+
+    response = requests.get(BINANCE_BASE_URL, params=params)
+    response.raise_for_status()
+    data = response.json()
+
+    df = pd.DataFrame(data, columns=[
+        "timestamp", "open", "high", "low", "close", "volume",
+        "_ignore1", "_ignore2", "_ignore3", "_ignore4", "_ignore5", "_ignore6"
+    ])
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+    df["vwap"] = (df["volume"] * (df["high"] + df["low"] + df["close"]) / 3).cumsum() / df["volume"].cumsum()
+    return df.tail(1).to_dict(orient="records")[0]
+
+
+# ========================
+# Twelve Data
+# ========================
+def get_from_twelve_data(symbol: str, interval: str):
+    interval_map = {"1h": "1h", "15m": "15min", "5m": "5min"}
+    interval_td = interval_map.get(interval, "1h")
+
     params = {
         "symbol": symbol,
-        "interval": "1min",
-        "outputsize": 100,
-        "apikey": API_KEY
+        "interval": interval_td,
+        "apikey": TWELVE_API_KEY,
+        "outputsize": 100
     }
-    response = requests.get(url, params=params)
+
+    response = requests.get(TWELVE_BASE_URL, params=params)
+    response.raise_for_status()
     data = response.json()
 
     if "values" not in data:
-        print(f"[ERROR] {symbol}: Sem dados válidos. Resposta:", data)
-        return None
+        raise Exception(f"Erro ao obter dados de {symbol}: {data}")
 
     df = pd.DataFrame(data["values"])
     df["datetime"] = pd.to_datetime(df["datetime"])
     df = df.sort_values("datetime")
-    df["open"] = df["open"].astype(float)
-    df["high"] = df["high"].astype(float)
-    df["low"] = df["low"].astype(float)
-    df["close"] = df["close"].astype(float)
-    df["volume"] = df["volume"].astype(float)
-    return df
-
-
-def calculate_vwap(df):
-    if df is None or df.empty:
-        return None
+    df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
     df["vwap"] = (df["volume"] * (df["high"] + df["low"] + df["close"]) / 3).cumsum() / df["volume"].cumsum()
-    return df
-
-
-def get_all_assets():
-    assets = {
-        "BTCUSD": "BTC/USD",
-        "ETHUSD": "ETH/USD",
-        "EURUSD": "EUR/USD",
-        "XAUUSD": "XAU/USD"
-    }
-
-    results = {}
-    for symbol, name in assets.items():
-        df = get_twelvedata(symbol)
-        df = calculate_vwap(df)
-        if df is not None:
-            results[symbol] = df
-    return results
+    return df.tail(1).to_dict(orient="records")[0]
