@@ -1,49 +1,31 @@
+from flask import Flask, jsonify, render_template
+from helpers import get_asset_data
 import logging
-from binance.client import Client
-import os
-from datetime import datetime
 
+app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 🔑 Credenciais Binance (setadas no Render)
-BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
-BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
+@app.route("/")
+def home():
+    return render_template("dashboard.html")
 
-client = Client(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+@app.route("/api/data")
+def api_data():
+    assets = ["BTCUSDT", "ETHUSDT", "EUR/USD", "XAU/USD"]
+    interval = "1h"
 
-# 🔹 Lista de ativos
-ASSETS = {
-    "BTCUSD": "BTCUSDT",
-    "ETHUSD": "ETHUSDT",
-    "EURUSD": "EURUSDT",
-    "XAUUSD": "XAUUSDT"
-}
+    response_data = {}
+    for symbol in assets:
+        df = get_asset_data(symbol, interval)
+        if not df.empty:
+            response_data[symbol] = {
+                "times": df["open_time"].astype(str).tolist(),
+                "prices": df["close"].tolist()
+            }
+        else:
+            response_data[symbol] = {"error": "Sem dados"}
+    return jsonify(response_data)
 
-def get_asset_data(symbol, interval='1h', limit=100):
-    """Obtém candles da Binance"""
-    try:
-        logger.info(f"🔹 Coletando {symbol} ({interval}) na Binance...")
-        klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
-        data = []
-        for k in klines:
-            data.append({
-                "timestamp": datetime.fromtimestamp(k[0]/1000).strftime('%Y-%m-%d %H:%M'),
-                "open": float(k[1]),
-                "high": float(k[2]),
-                "low": float(k[3]),
-                "close": float(k[4]),
-                "volume": float(k[5])
-            })
-        logger.info(f"✅ {symbol} carregado com {len(data)} candles.")
-        return data
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar {symbol}: {e}")
-        return []
-
-def get_all_assets_data():
-    """Agrega dados de todos os ativos"""
-    result = {}
-    for name, pair in ASSETS.items():
-        result[name] = get_asset_data(pair)
-    return result
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
