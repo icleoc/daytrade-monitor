@@ -5,6 +5,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def dashboard():
+    # Ativos reais e consistentes
     symbols = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
     return render_template("dashboard.html", symbols=symbols)
 
