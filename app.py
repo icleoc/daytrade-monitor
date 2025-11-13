@@ -4,9 +4,13 @@ import pandas as pd
 
 app = Flask(__name__)
 
+# Lista de símbolos padrão que o dashboard usa
+SYMBOLS = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
+
 @app.route("/")
 def dashboard():
-    return render_template("dashboard.html")
+    # Passamos a lista de símbolos para o template
+    return render_template("dashboard.html", symbols=SYMBOLS)
 
 @app.route("/api/data")
 def api_data():
@@ -16,9 +20,9 @@ def api_data():
     serialized = {}
     for symbol, df in data.items():
         if isinstance(df, pd.DataFrame):
-            serialized[symbol] = df.tail(100).to_dict(orient="records")  # últimos 100 candles
+            serialized[symbol] = df.tail(100).to_dict(orient="records")
         else:
-            serialized[symbol] = df  # mensagens de erro ou dicionários
+            serialized[symbol] = df  # mensagens de erro, etc.
 
     return jsonify(serialized)
 
