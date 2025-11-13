@@ -1,23 +1,26 @@
-import os
 from flask import Flask, render_template, jsonify
 from helpers import fetch_all_symbols
-import config
+import pandas as pd
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return render_template(
-        'dashboard.html',
-        symbols=config.SYMBOLS,
-        update_interval=config.UPDATE_INTERVAL_SECONDS
-    )
+@app.route("/")
+def dashboard():
+    return render_template("dashboard.html")
 
-@app.route('/api/data')
+@app.route("/api/data")
 def api_data():
     data = fetch_all_symbols()
-    return jsonify(data)
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Converter DataFrames em dicionários
+    serialized = {}
+    for symbol, df in data.items():
+        if isinstance(df, pd.DataFrame):
+            serialized[symbol] = df.tail(100).to_dict(orient="records")  # últimos 100 candles
+        else:
+            serialized[symbol] = df  # mensagens de erro ou dicionários
+
+    return jsonify(serialized)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
