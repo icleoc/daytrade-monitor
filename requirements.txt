@@ -5,6 +5,11 @@ numpy==2.3.4
 plotly==5.22.0
 python-dotenv==1.0.1
 
+Flask
+pandas
+plotly
+twelve_data
+requests
 
 flask
 gunicorn
