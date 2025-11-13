@@ -1,24 +1,19 @@
-# Simple config module
 import os
 
+# Símbolos que combinamos
+SYMBOLS = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
 
-SYMBOLS = [
-{"id": "BTCUSD", "td_symbol": "BTC/USD", "display": "BTC/USD", "type": "crypto"},
-{"id": "ETHUSD", "td_symbol": "ETH/USD", "display": "ETH/USD", "type": "crypto"},
-{"id": "EURUSD", "td_symbol": "EUR/USD", "display": "EUR/USD", "type": "forex"},
-{"id": "XAUUSD", "td_symbol": "XAU/USD", "display": "XAU/USD", "type": "forex"},
-]
+# Atualização / cache
+UPDATE_INTERVAL_SECONDS = 60  # 1 requisição por minuto (TTL do cache)
 
+# VWAP / bands params
+BAND_STD_MULTIPLIER = 1.0  # multiplicador para banda (pode ajustar)
 
-# timeframe in minutes for candles
-TIMEFRAME_MINUTES = int(os.getenv('TIMEFRAME_MINUTES', 15))
-# how often front-end should poll (seconds)
-UPDATE_INTERVAL_SECONDS = int(os.getenv('UPDATE_INTERVAL_SECONDS', 60))
+# Twelve Data
+TWELVE_API_KEY = os.getenv("TWELVE_API_KEY", "").strip()
 
+# CoinGecko fallback config
+COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
-# VWAP band multiplier (std dev)
-VWAP_BAND_MULT = float(os.getenv('VWAP_BAND_MULT', 1.0))
-
-
-TWELVE_API_KEY = os.getenv('TWELVE_API_KEY')
-DEBUG = bool(int(os.getenv('DEBUG', '0')))
+# Misc
+MAX_CANDLES = 200  # máximo de candles a buscar/retornar
