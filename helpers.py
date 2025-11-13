@@ -1,57 +1,72 @@
+"""
+helpers.py
+Responsável por consultar TwelveData via REST, montar candles, calcular VWAP, bandas e sinais.
+Design decisions:
+- Usa TwelveData REST (sem dependências adicionais) para Forex e Commodities e CRYPTO.
+- Faz mapeamento de símbolos: BTC/USDT -> BTC/USD (TwelveData usa USD base).
+- Implementa cache simples em memória para evitar exceder rate limits (1 requisição/min por símbolo).
+- Retorna estruturas JSON-serializáveis.
+"""
+
+
 import os
+import time
+import requests
+import logging
 import pandas as pd
-from config import TWELVE_API_KEY
-from twelve_data import TDClient  # supondo que você usa o pacote oficial
+import numpy as np
 from datetime import datetime
+import config
 
-from twelve_data import TDClient
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
-td = TDClient(os.getenv("TWELVE_API_KEY"))
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('helpers')
 
-API_KEY = os.getenv("TWELVE_API_KEY")
-td = TDClient(apikey=API_KEY)
 
-def get_all_data():
-    symbols = ["BTCUSD", "ETHUSD", "EURUSD", "XAUUSD"]
-    result = {}
-    
-    for symbol in symbols:
-        try:
-            # Busca candles
-            candles = td.time_series(symbol=symbol, interval="15min", outputsize=100).as_pandas()
-            
-            # Calcula VWAP e bandas
-            candles['vwap'] = (candles['close'] * candles['volume']).cumsum() / candles['volume'].cumsum()
-            candles['upper_band'] = candles['vwap'] + candles['vwap'].rolling(20).std()
-            candles['lower_band'] = candles['vwap'] - candles['vwap'].rolling(20).std()
-            
-            # Sinais de compra/venda
-            signals = []
-            for idx, row in candles.iterrows():
-                if row['close'] > row['upper_band']:
-                    signals.append({"datetime": idx.isoformat(), "signal": "SELL", "price": row['close']})
-                elif row['close'] < row['lower_band']:
-                    signals.append({"datetime": idx.isoformat(), "signal": "BUY", "price": row['close']})
-            
-            # Serializa candles para frontend
-            df_serialized = candles.reset_index()[['datetime','open','high','low','close','vwap','upper_band','lower_band']].to_dict(orient='records')
-            
-            result[symbol] = {
-                "last": candles['close'].iloc[-1],
-                "signals": signals,
-                "df": df_serialized,
-                "error": None
-            }
-            
-        except Exception as e:
-            result[symbol] = {
-                "last": None,
-                "signals": [],
-                "df": [],
-                "error": str(e)
-            }
-    
-    return result
+TWELVE_API_KEY = os.environ.get(config.TWELVE_API_ENV)
+
+
+# simples cache em memória: {symbol: {'ts': epoch, 'data': payload}}
+_cache = {}
+_cache_ttl = config.UPDATE_INTERVAL_SECONDS - 0 if config.UPDATE_INTERVAL_SECONDS > 5 else 1
+
+
+# Mapagem para TwelveData: usamos pares com USD. Recebe por ex 'BTC/USDT' -> 'BTC/USD'
+_symbol_map = {
+'BTC/USDT': 'BTC/USD',
+'ETH/USDT': 'ETH/USD',
+'EUR/USD': 'EUR/USD',
+'XAU/USD': 'XAU/USD'
+}
+
+
+# TwelveData espera interval como '15min' (não '15m')
+def _normalize_interval(tf):
+mapping = {
+'1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '45m': '45min',
+'1h': '1h', '2h': '2h', '4h': '4h', '8h': '8h', '1d': '1day'
+}
+return mapping.get(tf, tf)
+
+
+
+
+def _twelve_time_series(symbol, interval='15min', outputsize=200):
+"""Consulta TwelveData /time_series e retorna DataFrame com colunas: datetime, open, high, low, close, volume"""
+global TWELVE_API_KEY
+if not TWELVE_API_KEY:
+raise RuntimeError('TWELVE_API_KEY ausente nas variáveis de ambiente')
+
+
+td_symbol = _symbol_map.get(symbol, symbol)
+interval_td = _normalize_interval(interval)
+
+
+url = 'https://api.twelvedata.com/time_series'
+params = {
+'symbol': td_symbol,
+'interval': interval_td,
+'outputsize': outputsize,
+'format': 'JSON',
+'apikey': TWELVE_API_KEY
+return out
