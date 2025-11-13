@@ -1,20 +1,29 @@
-<!DOCTYPE html>
-<html lang="pt-br">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>VWAP Monitor Dashboard</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
-  <h1>📊 VWAP Monitor Dashboard</h1>
+  <div class="container">
+    <header>
+      <h1>📊 VWAP Monitor Dashboard</h1>
+      <div id="status">Carregando...</div>
+    </header>
 
-  <div id="dashboard" class="grid"></div>
+    <main id="cards" class="cards-grid">
+      <!-- cards serão injetados pelo JS -->
+    </main>
+  </div>
 
   <script>
-    const SYMBOLS = {{ symbols|tojson|safe }};
+    // symbols e intervalo vindos do server
+    const SYMBOLS = {{ symbols|tojson }};
+    const UPDATE_INTERVAL = {{ update_interval }};
   </script>
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+  <script src="/static/js/dashboard.js"></script>
 </body>
 </html>
