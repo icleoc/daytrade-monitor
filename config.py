@@ -17,3 +17,6 @@ COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
 # Misc
 MAX_CANDLES = 200  # máximo de candles a buscar/retornar
+
+# config.py
+TWELVE_API_KEY = "34b1f0bac586484c97725bbbbddad099"
