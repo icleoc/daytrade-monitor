@@ -1,21 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>VWAP Monitor Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VWAP Monitor Dashboard</title>
+<link rel="stylesheet" href="/static/css/style.css" />
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 VWAP Monitor Dashboard</h1>
-        <p>Ativos: {{ symbols|join(', ') }} — Atualiza a cada 60s</p>
-        <div id="cards" class="cards-container"></div>
-        <div id="charts" class="charts-container"></div>
-    </div>
-    <script>
-        const SYMBOLS = {{ symbols|tojson|safe }};
-    </script>
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<header>
+<h1>📊 VWAP Monitor Dashboard</h1>
+<p>Ativos: {{ symbols | join(', ') }} — Atualiza a cada {{ update_interval }}s</p>
+</header>
+
+
+<main id="cards-container">
+<!-- Cards serão injetados por JS -->
+</main>
+
+
+<script>
+const SYMBOLS = {{ symbols|tojson|safe }};
+const UPDATE_INTERVAL = {{ update_interval }} * 1000;
+</script>
+<script src="/static/js/dashboard.js"></script>
 </body>
 </html>
