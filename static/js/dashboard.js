@@ -1,66 +1,65 @@
-async function loadData() {
-    try {
-        const res = await fetch("/api/data");
-        const data = await res.json();
+document.addEventListener("DOMContentLoaded", async () => {
+    const symbols = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"];
 
-        const container = document.getElementById("dashboard");
-        container.innerHTML = "";
-
-        for (const [symbol, candles] of Object.entries(data)) {
-            if (!candles || candles.length === 0) continue;
-
-            const card = document.createElement("div");
-            card.className = "card";
-
-            const title = document.createElement("h2");
-            title.textContent = symbol;
-            card.appendChild(title);
-
-            const canvas = document.createElement("canvas");
-            card.appendChild(canvas);
-
-            container.appendChild(card);
-
-            const labels = candles.map(c => c.timestamp);
-            const closes = candles.map(c => c.close);
-            const signal = new Array(closes.length).fill(null);
-            signal[closes.length - 1] = closes[closes.length - 1];
-
-            new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: "Preço Fechamento",
-                            data: closes,
-                            borderColor: "#ff4747",
-                            borderWidth: 2,
-                            tension: 0.3
-                        },
-                        {
-                            label: "Sinal de Entrada",
-                            data: signal,
-                            borderColor: "#00ff00",
-                            pointRadius: 7,
-                            pointBackgroundColor: "#00ff00",
-                            showLine: false
-                        }
-                    ]
-                },
-                options: {
-                    plugins: { legend: { labels: { color: "#fff" } } },
-                    scales: {
-                        x: { display: false },
-                        y: { ticks: { color: "#fff" } }
-                    }
-                }
-            });
-        }
-    } catch (err) {
-        console.error("Erro ao carregar dados:", err);
+    async function fetchData() {
+        const response = await fetch("/api/data");
+        return await response.json();
     }
-}
 
-loadData();
-setInterval(loadData, 60000);
+    function updateCard(symbol, data) {
+        const card = document.querySelector(`#${symbol}`);
+        if (!card) return;
+
+        const priceEl = card.querySelector(".price");
+        const signalEl = card.querySelector(".signal");
+
+        if (priceEl) priceEl.textContent = data.price ? `$${data.price}` : "N/A";
+        if (signalEl) signalEl.textContent = data.signal || "NEUTRAL";
+
+        // Atualiza cor do card conforme o sinal
+        card.classList.remove("buy", "sell", "neutral");
+        if (data.signal === "BUY") card.classList.add("buy");
+        else if (data.signal === "SELL") card.classList.add("sell");
+        else card.classList.add("neutral");
+    }
+
+    function renderChart(symbol, data) {
+        const container = document.getElementById(`${symbol}-chart`);
+        if (!container) return;
+
+        container.innerHTML = ""; // limpa o gráfico anterior
+
+        const chart = LightweightCharts.createChart(container, {
+            width: container.clientWidth,
+            height: 250,
+            layout: { background: { color: "#fafafa" }, textColor: "#000" },
+            grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
+        });
+
+        const candleSeries = chart.addCandlestickSeries();
+        const vwapSeries = chart.addLineSeries({ color: "#007bff", lineWidth: 2 });
+        const upperBandSeries = chart.addLineSeries({ color: "#28a745", lineWidth: 1, lineStyle: 1 });
+        const lowerBandSeries = chart.addLineSeries({ color: "#dc3545", lineWidth: 1, lineStyle: 1 });
+
+        if (data.candles && data.vwap) {
+            candleSeries.setData(data.candles);
+            vwapSeries.setData(data.vwap);
+            upperBandSeries.setData(data.upper_band);
+            lowerBandSeries.setData(data.lower_band);
+        }
+    }
+
+    async function update() {
+        const result = await fetchData();
+
+        symbols.forEach(symbol => {
+            const data = result[symbol];
+            if (!data) return;
+            updateCard(symbol, data);
+            renderChart(symbol, data);
+        });
+    }
+
+    await update();
+    setInterval(update, 60000);
+});
