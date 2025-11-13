@@ -1,3 +1,173 @@
-<script>
-    const SYMBOLS = {{ symbols|tojson|safe }};
-</script>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VWAP Monitor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@3.3.0/dist/chartjs-chart-financial.min.js"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #f5f5f5;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #f5f5f5;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background-color: #1e1e1e;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.05);
+            transition: background-color 0.4s;
+        }
+        .card.buy {
+            background-color: rgba(0, 255, 0, 0.15);
+        }
+        .card.sell {
+            background-color: rgba(255, 0, 0, 0.15);
+        }
+        .card.neutral {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        canvas {
+            width: 100% !important;
+            height: 300px !important;
+        }
+        .symbol {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 VWAP Monitor Dashboard</h1>
+    <div class="grid" id="cardsContainer"></div>
+
+    <script>
+        const SYMBOLS = {{ symbols|tojson|safe }};
+        const container = document.getElementById("cardsContainer");
+
+        // Simula dados para gráfico (mock enquanto não vem do backend real)
+        function gerarDadosMock() {
+            const data = [];
+            const now = Date.now();
+            let price = 100;
+            for (let i = 0; i < 40; i++) {
+                const open = price;
+                const close = open + (Math.random() - 0.5) * 2;
+                const high = Math.max(open, close) + Math.random();
+                const low = Math.min(open, close) - Math.random();
+                price = close;
+                data.push({
+                    x: new Date(now - (40 - i) * 60000),
+                    o: open,
+                    h: high,
+                    l: low,
+                    c: close,
+                    vwap: (open + close + high + low) / 4,
+                    upper: close + 0.7,
+                    lower: close - 0.7,
+                });
+            }
+            return data;
+        }
+
+        function criarCard(symbol) {
+            const card = document.createElement("div");
+            card.className = "card neutral";
+            card.id = `card-${symbol.symbol}`;
+            card.innerHTML = `
+                <div class="symbol">${symbol.symbol}</div>
+                <canvas id="chart-${symbol.symbol}"></canvas>
+            `;
+            container.appendChild(card);
+            renderChart(symbol.symbol);
+        }
+
+        function renderChart(symbol) {
+            const ctx = document.getElementById(`chart-${symbol}`).getContext("2d");
+            const data = gerarDadosMock();
+
+            const candles = data.map(d => ({ x: d.x, o: d.o, h: d.h, l: d.l, c: d.c }));
+            const vwap = data.map(d => ({ x: d.x, y: d.vwap }));
+            const upper = data.map(d => ({ x: d.x, y: d.upper }));
+            const lower = data.map(d => ({ x: d.x, y: d.lower }));
+
+            const ultimoCandle = data[data.length - 1];
+            const card = document.getElementById(`card-${symbol}`);
+            const sinal = ultimoCandle.c > ultimoCandle.vwap ? "buy" : "sell";
+            card.className = `card ${sinal}`;
+
+            new Chart(ctx, {
+                type: "candlestick",
+                data: {
+                    datasets: [
+                        {
+                            label: symbol,
+                            data: candles,
+                            borderColor: "#aaa",
+                            color: { up: "#26a69a", down: "#ef5350", unchanged: "#757575" },
+                        },
+                        {
+                            label: "VWAP",
+                            type: "line",
+                            data: vwap,
+                            borderColor: "#ffd54f",
+                            borderWidth: 2,
+                            pointRadius: 0,
+                        },
+                        {
+                            label: "Upper Band",
+                            type: "line",
+                            data: upper,
+                            borderColor: "#66bb6a",
+                            borderWidth: 1,
+                            borderDash: [5,5],
+                            pointRadius: 0,
+                        },
+                        {
+                            label: "Lower Band",
+                            type: "line",
+                            data: lower,
+                            borderColor: "#ef5350",
+                            borderWidth: 1,
+                            borderDash: [5,5],
+                            pointRadius: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { type: "time", time: { unit: "minute" }, ticks: { color: "#ccc" } },
+                        y: { ticks: { color: "#ccc" } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: "#ccc" } }
+                    }
+                }
+            });
+        }
+
+        async function carregarDashboard() {
+            container.innerHTML = "";
+            SYMBOLS.forEach(criarCard);
+        }
+
+        carregarDashboard();
+        setInterval(carregarDashboard, 60000);
+    </script>
+</body>
+</html>
