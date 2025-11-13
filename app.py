@@ -1,33 +1,21 @@
 from flask import Flask, render_template, jsonify
-import threading
-import time
+from helpers import get_all_data
 
 app = Flask(__name__)
 
-# --- CONFIGURAÇÕES DO DASHBOARD ---
-# Aqui você define os ativos que o sistema deve monitorar
-SYMBOLS = [
-    {"symbol": "AAPL", "source": "yahoo"},
-    {"symbol": "MSFT", "source": "yahoo"},
-    {"symbol": "GOOG", "source": "yahoo"},
-    {"symbol": "BTCUSDT", "source": "binance"},
-    {"symbol": "ETHUSDT", "source": "binance"}
-]
-
 @app.route("/")
 def dashboard():
-    # Passa a lista SYMBOLS para o template
-    return render_template("dashboard.html", symbols=SYMBOLS)
+    # Ativos monitorados
+    symbols = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
+    return render_template("dashboard.html", symbols=symbols)
 
-@app.route("/api/symbols")
-def api_symbols():
-    return jsonify(SYMBOLS)
-
-def background_updater():
-    while True:
-        # Aqui depois você pode adicionar as rotinas que atualizam preços, VWAP etc.
-        time.sleep(60)
+@app.route("/api/data")
+def api_data():
+    try:
+        data = get_all_data()
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    threading.Thread(target=background_updater, daemon=True).start()
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
