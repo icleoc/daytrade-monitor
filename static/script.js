@@ -1,7 +1,6 @@
 async function fetchData() {
-    const response = await fetch("/api/data");
-    const data = await response.json();
-    return data;
+    const res = await fetch("/api/data");
+    return await res.json();
 }
 
 function gerarSinal(price, vwap) {
@@ -32,10 +31,11 @@ async function renderDashboard() {
 
         const price = info.price;
         const vwap = info.vwap;
+        const candles = info.candles;
         const sinal = gerarSinal(price, vwap);
         const cor = corSinal(sinal);
 
-        // Card
+        // CARD
         cards.innerHTML += `
             <div class="card" style="background:${cor}">
                 <h2>${symbol}</h2>
@@ -44,17 +44,20 @@ async function renderDashboard() {
                 <p class="sinal">${sinal}</p>
             </div>`;
 
-        // Gráfico simulado com candles e VWAP
-        const times = Array.from({ length: 20 }, (_, i) => `T${i}`);
-        const prices = times.map((_, i) => vwap * (1 + (Math.random() - 0.5) / 50));
+        // Dados para gráfico real
+        const times = candles.map(c => c.datetime);
+        const open = candles.map(c => c.open);
+        const high = candles.map(c => c.high);
+        const low = candles.map(c => c.low);
+        const close = candles.map(c => c.close);
         const vwapLine = Array(times.length).fill(vwap);
 
-        const candles = {
+        const candlesPlot = {
             x: times,
-            open: prices.map(p => p * (1 - 0.001)),
-            high: prices.map(p => p * (1 + 0.002)),
-            low: prices.map(p => p * (1 - 0.002)),
-            close: prices,
+            open: open,
+            high: high,
+            low: low,
+            close: close,
             type: "candlestick",
             name: symbol
         };
@@ -67,13 +70,14 @@ async function renderDashboard() {
             line: { color: "#3b82f6", width: 2 }
         };
 
-        const sinais = prices.map((p, i) => {
-            const s = gerarSinal(p, vwap);
+        // Sinais sobre candles
+        const sinais = candles.map((c, i) => {
+            const s = gerarSinal(c.close, vwap);
             if (s === "HOLD") return null;
             return {
-                x: times[i],
-                y: p,
-                text: s,
+                x: [c.datetime],
+                y: [c.close],
+                text: [s],
                 mode: "text+markers",
                 textposition: s === "COMPRA" ? "bottom center" : "top center",
                 marker: { color: corSinal(s), size: 12 },
@@ -82,7 +86,7 @@ async function renderDashboard() {
         }).filter(Boolean);
 
         const layout = {
-            title: `${symbol} — VWAP`,
+            title: `${symbol} — VWAP Real (15m)`,
             margin: { t: 40, b: 30 },
             xaxis: { showgrid: false },
             yaxis: { fixedrange: false }
@@ -93,9 +97,9 @@ async function renderDashboard() {
         container.id = `chart-${symbol}`;
         charts.appendChild(container);
 
-        Plotly.newPlot(container.id, [candles, traceVWAP, ...sinais], layout, { responsive: true });
+        Plotly.newPlot(container.id, [candlesPlot, traceVWAP, ...sinais], layout, { responsive: true });
     });
 }
 
-setInterval(renderDashboard, 60000); // 1x/min
+setInterval(renderDashboard, 60000);
 renderDashboard();
