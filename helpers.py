@@ -1,87 +1,85 @@
+import os
+import logging
 import requests
 import pandas as pd
-import logging
-import os
-from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Mirrors públicos da Binance (sem bloqueio)
-BINANCE_URLS = [
-    "https://api1.binance.com/api/v3/klines",
-    "https://data-api.binance.vision/api/v3/klines"
+BINANCE_MIRRORS = [
+    "https://api.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com"
 ]
 
-# Twelve Data
 TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
-TWELVE_BASE_URL = "https://api.twelvedata.com/time_series"
+TWELVE_BASE_URL = "https://api.twelvedata.com"
 
-def fetch_binance_symbol(symbol: str, interval: str = "1h", limit: int = 100):
-    """Busca candles da Binance por mirrors públicos."""
-    logger.info(f"🔹 Buscando {symbol} ({interval}) na Binance (mirror)...")
-    for base_url in BINANCE_URLS:
+ASSETS = [
+    {"symbol": "BTCUSDT", "source": "binance"},
+    {"symbol": "ETHUSDT", "source": "binance"},
+    {"symbol": "EURUSD", "source": "twelve"},
+    {"symbol": "XAUUSD", "source": "twelve"},
+]
+
+def fetch_binance_data(symbol):
+    for base_url in BINANCE_MIRRORS:
         try:
-            response = requests.get(
-                base_url,
-                params={"symbol": symbol, "interval": interval, "limit": limit},
-                timeout=10
-            )
-            response.raise_for_status()
-            data = response.json()
-            if not isinstance(data, list):
-                raise ValueError("Resposta inesperada da Binance")
-            df = pd.DataFrame(data, columns=[
-                "open_time", "open", "high", "low", "close",
-                "volume", "close_time", "qav", "num_trades",
-                "taker_base_vol", "taker_quote_vol", "ignore"
+            logging.info(f"🔹 Buscando {symbol} (1h) na Binance ({base_url})...")
+            url = f"{base_url}/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            df = pd.DataFrame(resp.json(), columns=[
+                'time', 'open', 'high', 'low', 'close',
+                'volume', 'close_time', 'quote_asset_volume',
+                'num_trades', 'taker_buy_base', 'taker_buy_quote', 'ignore'
             ])
-            df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
-            df["close"] = df["close"].astype(float)
-            logger.info(f"✅ {symbol}: {len(df)} candles recebidos da Binance mirror.")
-            return df[["open_time", "close"]]
+            df['close'] = df['close'].astype(float)
+            df['vwap'] = (
+                (df['high'].astype(float) + df['low'].astype(float) + df['close']) / 3
+            ).rolling(20).mean()
+            price = float(df['close'].iloc[-1])
+            vwap = float(df['vwap'].iloc[-1])
+            logging.info(f"✅ {symbol}: dados prontos.")
+            return {"symbol": symbol, "price": price, "vwap": vwap}
         except Exception as e:
-            logger.warning(f"⚠️ Tentativa falhou em {base_url}: {e}")
-    logger.error(f"❌ Falha total ao buscar {symbol} em todos os mirrors da Binance.")
-    return pd.DataFrame()
+            logging.warning(f"⚠️ Erro com {base_url}: {e}")
+    raise Exception(f"Erro ao buscar {symbol} na Binance")
 
-def fetch_twelvedata_symbol(symbol: str, interval: str = "1h", outputsize: int = 100):
-    """Busca candles de ativos não cripto (EURUSD, XAUUSD) via Twelve Data."""
-    logger.info(f"🔹 Buscando {symbol} ({interval}) na Twelve Data...")
+def fetch_twelve_data(symbol):
     if not TWELVE_API_KEY:
-        logger.error("❌ Faltando TWELVE_API_KEY nas variáveis de ambiente!")
-        return pd.DataFrame()
+        logging.error("❌ Faltando TWELVE_API_KEY nas variáveis de ambiente!")
+        return {"symbol": symbol, "error": "TWELVE_API_KEY ausente"}
     try:
-        response = requests.get(
-            TWELVE_BASE_URL,
-            params={
-                "symbol": symbol,
-                "interval": interval,
-                "apikey": TWELVE_API_KEY,
-                "outputsize": outputsize
-            },
-            timeout=10
-        )
-        data = response.json()
-        if "values" not in data:
-            logger.error(f"❌ Erro Twelve Data: {data.get('message', 'resposta inválida')}")
-            return pd.DataFrame()
-        df = pd.DataFrame(data["values"])
-        df["datetime"] = pd.to_datetime(df["datetime"])
-        df["close"] = df["close"].astype(float)
-        df.rename(columns={"datetime": "open_time"}, inplace=True)
-        logger.info(f"✅ {symbol}: {len(df)} candles recebidos da Twelve Data.")
-        return df[["open_time", "close"]]
+        logging.info(f"🔹 Buscando {symbol} (1h) na Twelve Data...")
+        url = f"{TWELVE_BASE_URL}/time_series?symbol={symbol}&interval=1h&outputsize=100&apikey={TWELVE_API_KEY}"
+        resp = requests.get(url, timeout=10)
+        data = resp.json().get('values', [])
+        if not data:
+            raise Exception("Sem dados válidos retornados")
+        df = pd.DataFrame(data)
+        df['close'] = df['close'].astype(float)
+        df['high'] = df['high'].astype(float)
+        df['low'] = df['low'].astype(float)
+        df['vwap'] = (
+            (df['high'] + df['low'] + df['close']) / 3
+        ).rolling(20).mean()
+        price = float(df['close'].iloc[-1])
+        vwap = float(df['vwap'].iloc[-1])
+        return {"symbol": symbol, "price": price, "vwap": vwap}
     except Exception as e:
-        logger.error(f"❌ Erro ao buscar {symbol} na Twelve Data: {e}")
-        return pd.DataFrame()
+        logging.error(f"❌ Erro ao buscar {symbol} na Twelve Data: {e}")
+        return {"symbol": symbol, "error": str(e)}
 
-def get_asset_data(symbol: str, interval: str = "1h"):
-    """Seleciona automaticamente a fonte conforme o ativo."""
-    if symbol in ["BTCUSDT", "ETHUSDT"]:
-        return fetch_binance_symbol(symbol, interval)
-    elif symbol in ["EURUSD", "XAUUSD", "EUR/USD", "XAU/USD"]:
-        return fetch_twelvedata_symbol(symbol.replace("/", ""), interval)
-    else:
-        logger.warning(f"⚠️ Ativo {symbol} não reconhecido.")
-        return pd.DataFrame()
+def get_all_assets_data():
+    results = {}
+    for asset in ASSETS:
+        symbol = asset['symbol']
+        try:
+            if asset['source'] == "binance":
+                results[symbol] = fetch_binance_data(symbol)
+            else:
+                results[symbol] = fetch_twelve_data(symbol)
+        except Exception as e:
+            logging.error(f"Erro ao buscar {symbol}: {e}")
+            results[symbol] = {"symbol": symbol, "error": str(e)}
+    return results
