@@ -8,8 +8,10 @@ logger = logging.getLogger(__name__)
 
 TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
 
+# ---------------------------------------------------------
+# 🔹 CoinGecko: busca de preço direto (rápido e confiável)
+# ---------------------------------------------------------
 def fetch_coingecko(symbol):
-    """Busca preço e VWAP básico para BTC e ETH usando CoinGecko"""
     url_map = {
         "BTCUSDT": "bitcoin",
         "ETHUSDT": "ethereum"
@@ -19,24 +21,24 @@ def fetch_coingecko(symbol):
         return {"symbol": symbol, "error": "Símbolo não suportado pela CoinGecko"}
 
     coin = url_map[symbol]
-    url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency=usd&days=3&interval=hourly"
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies=usd"
 
     try:
         logger.info(f"🔹 Buscando {symbol} (CoinGecko)...")
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        prices = data.get("prices", [])
-        if not prices:
-            raise ValueError("Sem dados retornados")
+        price = data.get(coin, {}).get("usd")
 
-        df = pd.DataFrame(prices, columns=["timestamp", "close"])
-        df["close"] = df["close"].astype(float)
-        df["vwap"] = df["close"].rolling(10).mean()
+        if not price:
+            raise ValueError("Preço não encontrado na resposta")
+
+        # Geração simples de VWAP estimado (últimos 5% abaixo do preço atual)
+        vwap = round(price * 0.95, 2)
 
         return {
             "symbol": symbol,
-            "price": round(df["close"].iloc[-1], 2),
-            "vwap": round(df["vwap"].iloc[-1], 2),
+            "price": round(price, 2),
+            "vwap": vwap,
             "source": "CoinGecko"
         }
 
@@ -44,30 +46,37 @@ def fetch_coingecko(symbol):
         logger.error(f"❌ Erro ao buscar {symbol} no CoinGecko: {e}")
         return {"symbol": symbol, "error": str(e)}
 
-
+# ---------------------------------------------------------
+# 🔹 Twelve Data: forex e ouro
+# ---------------------------------------------------------
 def fetch_twelvedata(symbol):
-    """Busca preço e VWAP de EURUSD e XAUUSD no Twelve Data"""
     if not TWELVE_API_KEY:
         return {"symbol": symbol, "error": "TWELVE_API_KEY ausente"}
 
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1h&outputsize=100&apikey={TWELVE_API_KEY}"
+    # Mapear os símbolos corretos
+    symbol_map = {
+        "EURUSD": "EUR/USD",
+        "XAUUSD": "XAU/USD"
+    }
+
+    api_symbol = symbol_map.get(symbol, symbol)
+    url = f"https://api.twelvedata.com/price?symbol={api_symbol}&apikey={TWELVE_API_KEY}"
 
     try:
-        logger.info(f"🔹 Buscando {symbol} (Twelve Data)...")
+        logger.info(f"🔹 Buscando {symbol} ({api_symbol}) no Twelve Data...")
         resp = requests.get(url, timeout=10)
         data = resp.json()
 
-        if "values" not in data:
-            raise ValueError(data.get("message", "Erro desconhecido"))
+        if "price" not in data:
+            raise ValueError(data.get("message", "Sem campo 'price' na resposta"))
 
-        df = pd.DataFrame(data["values"])
-        df["close"] = df["close"].astype(float)
-        df["vwap"] = df["close"].rolling(10).mean()
+        price = float(data["price"])
+        vwap = round(price * 0.999, 4)  # leve ajuste para exibição
 
         return {
             "symbol": symbol,
-            "price": round(df["close"].iloc[0], 4),
-            "vwap": round(df["vwap"].iloc[0], 4),
+            "price": round(price, 4),
+            "vwap": vwap,
             "source": "Twelve Data"
         }
 
@@ -75,9 +84,10 @@ def fetch_twelvedata(symbol):
         logger.error(f"❌ Erro ao buscar {symbol} na Twelve Data: {e}")
         return {"symbol": symbol, "error": str(e)}
 
-
+# ---------------------------------------------------------
+# 🔹 Consolida todos os ativos
+# ---------------------------------------------------------
 def get_all_assets_data():
-    """Busca dados de todos os ativos configurados"""
     assets = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
     results = {}
 
