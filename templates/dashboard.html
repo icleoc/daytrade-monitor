@@ -1,19 +1,30 @@
-<!DOCTYPE html>
-<html lang="pt-br">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>VWAP Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>📊 VWAP Monitor Dashboard</title>
+
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script>
+    // symbols and update interval injected by Flask
+    const SYMBOLS = {{ symbols|tojson|safe }};
+    const UPDATE_INTERVAL = {{ update_interval }};
+  </script>
 </head>
 <body>
+  <header>
     <h1>📊 VWAP Monitor Dashboard</h1>
-    <div id="cards-container"></div>
-    <div id="charts-container"></div>
+    <p>Ativos: <strong>{{ symbols|join(", ") }}</strong> — Atualiza a cada <strong>{{ update_interval }}s</strong></p>
+  </header>
 
-    <script>
-        const SYMBOLS = {{ symbols|tojson|safe }};
-    </script>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <main id="cards-container" class="cards-grid">
+    <!-- cards serão gerados dinamicamente -->
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
 </body>
 </html>
