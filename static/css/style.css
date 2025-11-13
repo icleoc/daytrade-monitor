@@ -1,1 +1,19 @@
-body { font-family: Inter, Arial,
+.card {
+    border-radius: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    transition: background-color 0.5s ease;
+}
+
+.card.buy {
+    background-color: #d4edda; /* verde claro */
+}
+
+.card.sell {
+    background-color: #f8d7da; /* vermelho claro */
+}
+
+.card.neutral {
+    background-color: #f8f9fa; /* cinza neutro */
+}
