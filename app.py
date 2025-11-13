@@ -1,30 +1,23 @@
-from flask import Flask, render_template, jsonify
-from dotenv import load_dotenv
-import logging
 import os
-
-
-load_dotenv()
-
-
+from flask import Flask, render_template, jsonify
+from helpers import fetch_all_symbols
 import config
-from helpers import get_all_assets_data
-
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
-
 
 @app.route('/')
-def index():
-return render_template('dashboard.html', symbols=config.SYMBOLS, update_interval=config.UPDATE_INTERVAL_SECONDS)
-
+def home():
+    return render_template(
+        'dashboard.html',
+        symbols=config.SYMBOLS,
+        update_interval=config.UPDATE_INTERVAL_SECONDS
+    )
 
 @app.route('/api/data')
 def api_data():
-data = get_all_assets_data(config.SYMBOLS)
-return jsonify(data)
-
+    data = fetch_all_symbols()
+    return jsonify(data)
 
 if __name__ == '__main__':
-app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=config.DEBUG)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
