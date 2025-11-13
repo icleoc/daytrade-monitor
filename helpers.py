@@ -4,6 +4,13 @@ from config import TWELVE_API_KEY
 from twelve_data import TDClient  # supondo que você usa o pacote oficial
 from datetime import datetime
 
+from twelve_data import TDClient
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+td = TDClient(os.getenv("TWELVE_API_KEY"))
+
 API_KEY = os.getenv("TWELVE_API_KEY")
 td = TDClient(apikey=API_KEY)
 
