@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from config import TWELVE_API_KEY
 from twelve_data import TDClient  # supondo que você usa o pacote oficial
 from datetime import datetime
 
