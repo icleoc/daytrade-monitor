@@ -5,15 +5,13 @@ import logging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger("helpers")
 
-COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price"
+API_KEY = "TwelveData_API_Key_Aqui"  # já configurado no Render
 TWELVE_URL = "https://api.twelvedata.com/time_series"
 
-COINGECKO_IDS = {
-    "BTCUSDT": "bitcoin",
-    "ETHUSDT": "ethereum"
-}
-
-TWELVE_SYMBOLS = {
+# Dicionário com símbolos e nomes compatíveis
+SYMBOL_MAP = {
+    "BTCUSDT": "BTC/USD",
+    "ETHUSDT": "ETH/USD",
     "EURUSD": "EUR/USD",
     "XAUUSD": "XAU/USD"
 }
@@ -21,56 +19,55 @@ TWELVE_SYMBOLS = {
 CACHE = {}
 LAST_FETCH = {}
 
-API_KEY = "TwelveData_API_Key_Aqui"  # já configurado no Render
-
-def fetch_coingecko(symbol):
-    now = time.time()
-    if symbol in CACHE and now - LAST_FETCH.get(symbol, 0) < 60:
-        return CACHE[symbol]
-
-    try:
-        coin_id = COINGECKO_IDS[symbol]
-        params = {"ids": coin_id, "vs_currencies": "usd"}
-        r = requests.get(COINGECKO_URL, params=params, timeout=10)
-        data = r.json()
-        price = data[coin_id]["usd"]
-        vwap = price * 0.995  # valor simulado de exemplo
-        CACHE[symbol] = {"price": price, "vwap": vwap}
-        LAST_FETCH[symbol] = now
-        return CACHE[symbol]
-    except Exception as e:
-        logger.error(f"Erro ao buscar {symbol} no CoinGecko: {e}")
-        return {"error": str(e)}
-
 def fetch_twelve(symbol):
+    """Busca candles reais e calcula VWAP"""
     now = time.time()
     if symbol in CACHE and now - LAST_FETCH.get(symbol, 0) < 60:
         return CACHE[symbol]
 
     try:
-        r = requests.get(TWELVE_URL, params={
-            "symbol": TWELVE_SYMBOLS[symbol],
+        params = {
+            "symbol": SYMBOL_MAP[symbol],
             "interval": "15min",
             "apikey": API_KEY,
-            "outputsize": 20
-        }, timeout=10)
+            "outputsize": 50
+        }
+        r = requests.get(TWELVE_URL, params=params, timeout=10)
         data = r.json()
         values = data.get("values", [])
         if not values:
             raise Exception("Dados não retornados")
-        latest = float(values[0]["close"])
-        vwap = sum(float(v["close"]) for v in values) / len(values)
-        CACHE[symbol] = {"price": latest, "vwap": vwap}
+
+        # Converter para float e inverter ordem (mais antigo primeiro)
+        candles = [{
+            "datetime": v["datetime"],
+            "open": float(v["open"]),
+            "high": float(v["high"]),
+            "low": float(v["low"]),
+            "close": float(v["close"]),
+            "volume": float(v.get("volume", 0))
+        } for v in reversed(values)]
+
+        # VWAP = (Σ (Preço Médio * Volume)) / Σ Volume
+        total_pv = 0
+        total_vol = 0
+        for c in candles:
+            price_mean = (c["high"] + c["low"] + c["close"]) / 3
+            vol = c["volume"] if c["volume"] > 0 else 1
+            total_pv += price_mean * vol
+            total_vol += vol
+        vwap = total_pv / total_vol if total_vol else candles[-1]["close"]
+
+        latest = candles[-1]["close"]
+        CACHE[symbol] = {"price": latest, "vwap": vwap, "candles": candles}
         LAST_FETCH[symbol] = now
         return CACHE[symbol]
     except Exception as e:
-        logger.error(f"Erro ao buscar {symbol} no Twelve Data: {e}")
+        logger.error(f"Erro ao buscar {symbol}: {e}")
         return {"error": str(e)}
 
 def get_all_data():
     data = {}
-    for symbol in ["BTCUSDT", "ETHUSDT"]:
-        data[symbol] = fetch_coingecko(symbol)
-    for symbol in ["EURUSD", "XAUUSD"]:
+    for symbol in SYMBOL_MAP:
         data[symbol] = fetch_twelve(symbol)
     return data
