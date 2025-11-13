@@ -1,85 +1,86 @@
 import os
-import logging
 import requests
+import logging
 import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
-BINANCE_MIRRORS = [
-    "https://api.binance.com",
-    "https://api1.binance.com",
-    "https://api2.binance.com",
-    "https://api3.binance.com"
-]
+logger = logging.getLogger(__name__)
 
 TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
-TWELVE_BASE_URL = "https://api.twelvedata.com"
 
-ASSETS = [
-    {"symbol": "BTCUSDT", "source": "binance"},
-    {"symbol": "ETHUSDT", "source": "binance"},
-    {"symbol": "EURUSD", "source": "twelve"},
-    {"symbol": "XAUUSD", "source": "twelve"},
-]
+def fetch_coingecko(symbol):
+    """Busca preço histórico (últimas 100h) de um criptoativo pela CoinGecko"""
+    url_map = {
+        "BTCUSDT": "bitcoin",
+        "ETHUSDT": "ethereum"
+    }
+    if symbol not in url_map:
+        return None
 
-def fetch_binance_data(symbol):
-    for base_url in BINANCE_MIRRORS:
-        try:
-            logging.info(f"🔹 Buscando {symbol} (1h) na Binance ({base_url})...")
-            url = f"{base_url}/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
-            resp = requests.get(url, timeout=10)
-            resp.raise_for_status()
-            df = pd.DataFrame(resp.json(), columns=[
-                'time', 'open', 'high', 'low', 'close',
-                'volume', 'close_time', 'quote_asset_volume',
-                'num_trades', 'taker_buy_base', 'taker_buy_quote', 'ignore'
-            ])
-            df['close'] = df['close'].astype(float)
-            df['vwap'] = (
-                (df['high'].astype(float) + df['low'].astype(float) + df['close']) / 3
-            ).rolling(20).mean()
-            price = float(df['close'].iloc[-1])
-            vwap = float(df['vwap'].iloc[-1])
-            logging.info(f"✅ {symbol}: dados prontos.")
-            return {"symbol": symbol, "price": price, "vwap": vwap}
-        except Exception as e:
-            logging.warning(f"⚠️ Erro com {base_url}: {e}")
-    raise Exception(f"Erro ao buscar {symbol} na Binance")
+    coin = url_map[symbol]
+    url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart?vs_currency=usd&days=3&interval=hourly"
 
-def fetch_twelve_data(symbol):
-    if not TWELVE_API_KEY:
-        logging.error("❌ Faltando TWELVE_API_KEY nas variáveis de ambiente!")
-        return {"symbol": symbol, "error": "TWELVE_API_KEY ausente"}
     try:
-        logging.info(f"🔹 Buscando {symbol} (1h) na Twelve Data...")
-        url = f"{TWELVE_BASE_URL}/time_series?symbol={symbol}&interval=1h&outputsize=100&apikey={TWELVE_API_KEY}"
+        logger.info(f"🔹 Buscando {symbol} (CoinGecko)...")
         resp = requests.get(url, timeout=10)
-        data = resp.json().get('values', [])
-        if not data:
-            raise Exception("Sem dados válidos retornados")
-        df = pd.DataFrame(data)
-        df['close'] = df['close'].astype(float)
-        df['high'] = df['high'].astype(float)
-        df['low'] = df['low'].astype(float)
-        df['vwap'] = (
-            (df['high'] + df['low'] + df['close']) / 3
-        ).rolling(20).mean()
-        price = float(df['close'].iloc[-1])
-        vwap = float(df['vwap'].iloc[-1])
-        return {"symbol": symbol, "price": price, "vwap": vwap}
+        data = resp.json()
+
+        prices = data.get("prices", [])
+        if not prices:
+            raise ValueError("Sem dados retornados")
+
+        df = pd.DataFrame(prices, columns=["timestamp", "close"])
+        df["close"] = df["close"].astype(float)
+        df["vwap"] = df["close"].rolling(10).mean()
+        return {
+            "symbol": symbol,
+            "price": round(df["close"].iloc[-1], 2),
+            "vwap": round(df["vwap"].iloc[-1], 2),
+            "source": "CoinGecko"
+        }
     except Exception as e:
-        logging.error(f"❌ Erro ao buscar {symbol} na Twelve Data: {e}")
+        logger.error(f"❌ Erro ao buscar {symbol} no CoinGecko: {e}")
         return {"symbol": symbol, "error": str(e)}
 
+
+def fetch_twelvedata(symbol):
+    """Busca dados do Twelve Data (EURUSD, XAUUSD)"""
+    if not TWELVE_API_KEY:
+        return {"symbol": symbol, "error": "TWELVE_API_KEY ausente"}
+
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1h&outputsize=100&apikey={TWELVE_API_KEY}"
+
+    try:
+        logger.info(f"🔹 Buscando {symbol} (Twelve Data)...")
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+
+        if "values" not in data:
+            raise ValueError(data.get("message", "Erro desconhecido"))
+
+        df = pd.DataFrame(data["values"])
+        df["close"] = df["close"].astype(float)
+        df["vwap"] = df["close"].rolling(10).mean()
+        return {
+            "symbol": symbol,
+            "price": round(df["close"].iloc[0], 4),
+            "vwap": round(df["vwap"].iloc[0], 4),
+            "source": "Twelve Data"
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar {symbol} na Twelve Data: {e}")
+        return {"symbol": symbol, "error": str(e)}
+
+
 def get_all_assets_data():
+    """Busca todos os ativos configurados"""
+    assets = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
     results = {}
-    for asset in ASSETS:
-        symbol = asset['symbol']
-        try:
-            if asset['source'] == "binance":
-                results[symbol] = fetch_binance_data(symbol)
-            else:
-                results[symbol] = fetch_twelve_data(symbol)
-        except Exception as e:
-            logging.error(f"Erro ao buscar {symbol}: {e}")
-            results[symbol] = {"symbol": symbol, "error": str(e)}
+
+    for asset in assets:
+        if asset in ["BTCUSDT", "ETHUSDT"]:
+            results[asset] = fetch_coingecko(asset)
+        else:
+            results[asset] = fetch_twelvedata(asset)
+
     return results
