@@ -1,100 +1,70 @@
-import os
-import requests
+"""Helpers to fetch OHLC data and compute VWAP and signals.
+Primary source: Twelve Data (requires TWELVE_API_KEY). Fallback: CoinGecko for BTC/ETH only.
+"""
+import time
 import logging
+import os
+from typing import List, Dict, Any
+import requests
 import pandas as pd
+import numpy as np
+from config import TWELVE_API_KEY, TIMEFRAME_MINUTES, VWAP_BAND_MULT
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
+logger = logging.getLogger('helpers')
+logger.setLevel(logging.INFO)
 
-# ---------------------------------------------------------
-# 🔹 CoinGecko: busca de preço direto (rápido e confiável)
-# ---------------------------------------------------------
-def fetch_coingecko(symbol):
-    url_map = {
-        "BTCUSDT": "bitcoin",
-        "ETHUSDT": "ethereum"
-    }
 
-    if symbol not in url_map:
-        return {"symbol": symbol, "error": "Símbolo não suportado pela CoinGecko"}
+# --- Utilities ---
 
-    coin = url_map[symbol]
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies=usd"
 
-    try:
-        logger.info(f"🔹 Buscando {symbol} (CoinGecko)...")
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        price = data.get(coin, {}).get("usd")
+def _to_unix_ms(ts):
+return int(int(ts) / 1000) if ts > 1e12 else int(ts * 1000)
 
-        if not price:
-            raise ValueError("Preço não encontrado na resposta")
 
-        # Geração simples de VWAP estimado (últimos 5% abaixo do preço atual)
-        vwap = round(price * 0.95, 2)
+# --- Fetchers ---
 
-        return {
-            "symbol": symbol,
-            "price": round(price, 2),
-            "vwap": vwap,
-            "source": "CoinGecko"
-        }
 
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar {symbol} no CoinGecko: {e}")
-        return {"symbol": symbol, "error": str(e)}
+def fetch_from_twelvedata(symbol: str, interval: str = '15min', outputsize: int = 500) -> pd.DataFrame:
+"""Fetch time_series from Twelve Data. Returns DataFrame with columns: datetime, open, high, low, close, volume"""
+if not TWELVE_API_KEY:
+raise RuntimeError('TWELVE_API_KEY missing')
 
-# ---------------------------------------------------------
-# 🔹 Twelve Data: forex e ouro
-# ---------------------------------------------------------
-def fetch_twelvedata(symbol):
-    if not TWELVE_API_KEY:
-        return {"symbol": symbol, "error": "TWELVE_API_KEY ausente"}
 
-    # Mapear os símbolos corretos
-    symbol_map = {
-        "EURUSD": "EUR/USD",
-        "XAUUSD": "XAU/USD"
-    }
+url = 'https://api.twelvedata.com/time_series'
+params = {
+'symbol': symbol,
+'interval': interval,
+'outputsize': outputsize,
+'format': 'JSON',
+'apikey': TWELVE_API_KEY,
+}
+resp = requests.get(url, params=params, timeout=15)
+resp.raise_for_status()
+data = resp.json()
 
-    api_symbol = symbol_map.get(symbol, symbol)
-    url = f"https://api.twelvedata.com/price?symbol={api_symbol}&apikey={TWELVE_API_KEY}"
 
-    try:
-        logger.info(f"🔹 Buscando {symbol} ({api_symbol}) no Twelve Data...")
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
+if 'values' not in data:
+raise RuntimeError(f'Unexpected Twelve Data response: {data.get("message") or data}')
 
-        if "price" not in data:
-            raise ValueError(data.get("message", "Sem campo 'price' na resposta"))
 
-        price = float(data["price"])
-        vwap = round(price * 0.999, 4)  # leve ajuste para exibição
+df = pd.DataFrame(data['values'])
+# Twelve Data returns newest first; reverse
+df = df.iloc[::-1].reset_index(drop=True)
+# ensure correct types
+df['datetime'] = pd.to_datetime(df['datetime'])
+df[['open', 'high', 'low', 'close']] = df[['open', 'high', 'low', 'close']].astype(float)
+if 'volume' in df.columns:
+df['volume'] = df['volume'].astype(float)
+else:
+df['volume'] = 0.0
+return df
 
-        return {
-            "symbol": symbol,
-            "price": round(price, 4),
-            "vwap": vwap,
-            "source": "Twelve Data"
-        }
 
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar {symbol} na Twelve Data: {e}")
-        return {"symbol": symbol, "error": str(e)}
 
-# ---------------------------------------------------------
-# 🔹 Consolida todos os ativos
-# ---------------------------------------------------------
-def get_all_assets_data():
-    assets = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"]
-    results = {}
 
-    for asset in assets:
-        if asset in ["BTCUSDT", "ETHUSDT"]:
-            results[asset] = fetch_coingecko(asset)
-        else:
-            results[asset] = fetch_twelvedata(asset)
-
-    return results
+def fetch_from_coingecko(symbol_id: str, vs_currency: str = 'usd', minutes: int = 15, points: int = 500) -> pd.DataFrame:
+"""Fetch OHLC-like data via CoinGecko (ohlc endpoint). symbol_id: 'bitcoin' or 'ethereum'
+Returns timestamp in ms.
+"""
+return out
