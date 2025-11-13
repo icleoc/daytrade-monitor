@@ -1,31 +1,26 @@
-from flask import Flask, jsonify, render_template
-from helpers import get_asset_data
+from flask import Flask, render_template, jsonify
+from helpers import get_market_data
 import logging
 
 app = Flask(__name__)
+
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app")
 
 @app.route("/")
-def home():
-    return render_template("dashboard.html")
+def index():
+    return render_template("index.html")
 
 @app.route("/api/data")
 def api_data():
-    assets = ["BTCUSDT", "ETHUSDT", "EUR/USD", "XAU/USD"]
-    interval = "1h"
-
-    response_data = {}
-    for symbol in assets:
-        df = get_asset_data(symbol, interval)
-        if not df.empty:
-            response_data[symbol] = {
-                "times": df["open_time"].astype(str).tolist(),
-                "prices": df["close"].tolist()
-            }
-        else:
-            response_data[symbol] = {"error": "Sem dados"}
-    return jsonify(response_data)
+    try:
+        data = get_market_data()
+        if not data:
+            return jsonify({"error": "Sem dados disponíveis"}), 500
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Erro na API: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
