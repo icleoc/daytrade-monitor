@@ -1,65 +1,106 @@
-document.addEventListener("DOMContentLoaded", async () => {
-    const symbols = ["BTCUSDT", "ETHUSDT", "EURUSD", "XAUUSD"];
+async function fetchData() {
+  try {
+    const res = await fetch("/api/data");
+    if (!res.ok) throw new Error("Erro ao obter /api/data");
+    const j = await res.json();
+    return j;
+  } catch (e) {
+    console.error(e);
+    return { error: e.message };
+  }
+}
 
-    async function fetchData() {
-        const response = await fetch("/api/data");
-        return await response.json();
-    }
+function createCard(symbol) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.id = `card-${symbol}`;
 
-    function updateCard(symbol, data) {
-        const card = document.querySelector(`#${symbol}`);
-        if (!card) return;
+  const title = document.createElement("h2");
+  title.innerText = symbol;
+  card.appendChild(title);
 
-        const priceEl = card.querySelector(".price");
-        const signalEl = card.querySelector(".signal");
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML = `<span class="small">Último preço: <span id="price-${symbol}">—</span></span>`;
+  card.appendChild(meta);
 
-        if (priceEl) priceEl.textContent = data.price ? `$${data.price}` : "N/A";
-        if (signalEl) signalEl.textContent = data.signal || "NEUTRAL";
+  const sig = document.createElement("div");
+  sig.className = "signal HOLD";
+  sig.id = `signal-${symbol}`;
+  sig.innerText = "HOLD";
+  card.appendChild(sig);
 
-        // Atualiza cor do card conforme o sinal
-        card.classList.remove("buy", "sell", "neutral");
-        if (data.signal === "BUY") card.classList.add("buy");
-        else if (data.signal === "SELL") card.classList.add("sell");
-        else card.classList.add("neutral");
-    }
+  const canvasBox = document.createElement("div");
+  canvasBox.className = "canvas-placeholder";
+  canvasBox.id = `chart-${symbol}`;
+  canvasBox.innerText = "Gráfico (candles + VWAP)";
+  card.appendChild(canvasBox);
 
-    function renderChart(symbol, data) {
-        const container = document.getElementById(`${symbol}-chart`);
-        if (!container) return;
+  return card;
+}
 
-        container.innerHTML = ""; // limpa o gráfico anterior
+function renderEmptyCards(symbols) {
+  const container = document.getElementById("cards");
+  container.innerHTML = "";
+  symbols.forEach(s => container.appendChild(createCard(s)));
+}
 
-        const chart = LightweightCharts.createChart(container, {
-            width: container.clientWidth,
-            height: 250,
-            layout: { background: { color: "#fafafa" }, textColor: "#000" },
-            grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
-        });
+function colorCardBySignal(symbol, signal) {
+  const card = document.getElementById(`card-${symbol}`);
+  if (!card) return;
+  card.style.border = "1px solid rgba(255,255,255,0.04)";
+  if (signal === "BUY") {
+    card.style.boxShadow = "0 6px 18px rgba(40,167,69,0.08)";
+  } else if (signal === "SELL") {
+    card.style.boxShadow = "0 6px 18px rgba(220,53,69,0.08)";
+  } else {
+    card.style.boxShadow = "none";
+  }
+}
 
-        const candleSeries = chart.addCandlestickSeries();
-        const vwapSeries = chart.addLineSeries({ color: "#007bff", lineWidth: 2 });
-        const upperBandSeries = chart.addLineSeries({ color: "#28a745", lineWidth: 1, lineStyle: 1 });
-        const lowerBandSeries = chart.addLineSeries({ color: "#dc3545", lineWidth: 1, lineStyle: 1 });
+function updateCard(symbol, obj) {
+  const priceEl = document.getElementById(`price-${symbol}`);
+  const sigEl = document.getElementById(`signal-${symbol}`);
+  if (obj.error) {
+    priceEl.innerText = `Erro: ${obj.error}`;
+    sigEl.innerText = "ERROR";
+    sigEl.className = "signal HOLD";
+    colorCardBySignal(symbol, "HOLD");
+    return;
+  }
+  priceEl.innerText = obj.last_close ?? "—";
+  sigEl.innerText = obj.signal ?? "HOLD";
+  sigEl.className = `signal ${obj.signal ?? "HOLD"}`;
+  colorCardBySignal(symbol, obj.signal ?? "HOLD");
 
-        if (data.candles && data.vwap) {
-            candleSeries.setData(data.candles);
-            vwapSeries.setData(data.vwap);
-            upperBandSeries.setData(data.upper_band);
-            lowerBandSeries.setData(data.lower_band);
-        }
-    }
+  // chart placeholder: for now we show min/max/last of returned candles
+  const chartBox = document.getElementById(`chart-${symbol}`);
+  if (obj.candles && obj.candles.length) {
+    const last = obj.candles[obj.candles.length - 1];
+    const min = Math.min(...obj.candles.map(c => c.low));
+    const max = Math.max(...obj.candles.map(c => c.high));
+    chartBox.innerHTML = `Último: ${last.close} — Min: ${min} — Max: ${max}`;
+  } else {
+    chartBox.innerText = "Sem candles disponíveis";
+  }
+}
 
-    async function update() {
-        const result = await fetchData();
+async function loop() {
+  document.getElementById("status").innerText = "Atualizando...";
+  const data = await fetchData();
+  if (data.error) {
+    document.getElementById("status").innerText = "Erro: " + data.error;
+    return;
+  }
+  SYMBOLS.forEach(sym => {
+    const obj = data[sym] || { error: "Sem dados" };
+    updateCard(sym, obj);
+  });
+  document.getElementById("status").innerText = "Última atualização: " + new Date().toLocaleString();
+}
 
-        symbols.forEach(symbol => {
-            const data = result[symbol];
-            if (!data) return;
-            updateCard(symbol, data);
-            renderChart(symbol, data);
-        });
-    }
-
-    await update();
-    setInterval(update, 60000);
+window.addEventListener("load", () => {
+  renderEmptyCards(SYMBOLS);
+  loop();
+  setInterval(loop, UPDATE_INTERVAL * 1000);
 });
