@@ -15,11 +15,19 @@ def fetch_from_coingecko(symbol):
     if not coin:
         return None
 
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies=usd"
+    url = f"https://api.coingecko.com/api/v3/simple/price"
+    headers = {"accept": "application/json", "User-Agent": "VWAP-Monitor"}
+    params = {"ids": coin, "vs_currencies": "usd"}
+
     try:
-        r = requests.get(url, timeout=10).json()
-        price = r[coin]["usd"]
-        return {"symbol": symbol, "price": price}
+        r = requests.get(url, headers=headers, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if coin not in data or "usd" not in data[coin]:
+            raise KeyError("Formato inesperado no retorno da CoinGecko")
+
+        price = data[coin]["usd"]
+        return {"symbol": symbol, "price": price, "signal": "HOLD", "data": []}
     except Exception as e:
         logger.error(f"Erro ao buscar {symbol} no CoinGecko: {e}")
         return {"symbol": symbol, "error": str(e)}
