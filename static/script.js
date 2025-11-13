@@ -1,76 +1,101 @@
 async function fetchData() {
-  const res = await fetch("/api/data");
-  return await res.json();
+    const response = await fetch("/api/data");
+    const data = await response.json();
+    return data;
 }
 
-function createCard(symbol) {
-  const div = document.createElement("div");
-  div.className = "card hold";
-  div.id = `card-${symbol}`;
-  div.innerHTML = `
-    <h2>${symbol}</h2>
-    <p id="price-${symbol}">Carregando...</p>
-    <canvas id="chart-${symbol}"></canvas>
-  `;
-  document.getElementById("dashboard").appendChild(div);
+function gerarSinal(price, vwap) {
+    if (price > vwap * 1.002) return "VENDA";
+    if (price < vwap * 0.998) return "COMPRA";
+    return "HOLD";
 }
 
-function updateCard(symbol, info) {
-  const card = document.getElementById(`card-${symbol}`);
-  if (!card || !info) return;
-
-  const priceEl = document.getElementById(`price-${symbol}`);
-  if (info.error) {
-    priceEl.innerText = `Erro: ${info.error}`;
-    card.className = "card hold";
-    return;
-  }
-
-  priceEl.innerText = `Preço: $${info.price.toFixed(2)} | Sinal: ${info.signal}`;
-  card.className = `card ${info.signal.toLowerCase()}`;
-  renderChart(symbol, info.data);
+function corSinal(sinal) {
+    if (sinal === "COMPRA") return "#16a34a";
+    if (sinal === "VENDA") return "#dc2626";
+    return "#6b7280";
 }
 
-function renderChart(symbol, data) {
-  if (!data || data.length === 0) return;
+async function renderDashboard() {
+    const data = await fetchData();
+    const cards = document.getElementById("cards-container");
+    const charts = document.getElementById("charts-container");
+    cards.innerHTML = "";
+    charts.innerHTML = "";
 
-  const ctx = document.getElementById(`chart-${symbol}`).getContext("2d");
-  const labels = data.map(d => d.datetime);
-  const close = data.map(d => parseFloat(d.close));
-  const vwap = data.map(d => parseFloat(d.vwap));
-  const upper = data.map(d => parseFloat(d.upper_band));
-  const lower = data.map(d => parseFloat(d.lower_band));
+    SYMBOLS.forEach(symbol => {
+        const info = data[symbol];
+        if (!info || info.error) {
+            cards.innerHTML += `<div class="card error">${symbol}<br>Erro: ${info?.error || "Sem dados"}</div>`;
+            return;
+        }
 
-  new Chart(ctx, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        { label: "Preço", data: close, borderColor: "#fff", fill: false },
-        { label: "VWAP", data: vwap, borderColor: "#ffcc00", fill: false },
-        { label: "Upper", data: upper, borderColor: "#00c853", borderDash: [5,5], fill: false },
-        { label: "Lower", data: lower, borderColor: "#d32f2f", borderDash: [5,5], fill: false },
-      ]
-    },
-    options: {
-      plugins: { legend: { labels: { color: '#f5f5f5' } } },
-      scales: {
-        x: { ticks: { color: '#ccc' }, grid: { color: '#333' } },
-        y: { ticks: { color: '#ccc' }, grid: { color: '#333' } }
-      }
-    }
-  });
+        const price = info.price;
+        const vwap = info.vwap;
+        const sinal = gerarSinal(price, vwap);
+        const cor = corSinal(sinal);
+
+        // Card
+        cards.innerHTML += `
+            <div class="card" style="background:${cor}">
+                <h2>${symbol}</h2>
+                <p><strong>Preço:</strong> ${price.toFixed(2)}</p>
+                <p><strong>VWAP:</strong> ${vwap.toFixed(2)}</p>
+                <p class="sinal">${sinal}</p>
+            </div>`;
+
+        // Gráfico simulado com candles e VWAP
+        const times = Array.from({ length: 20 }, (_, i) => `T${i}`);
+        const prices = times.map((_, i) => vwap * (1 + (Math.random() - 0.5) / 50));
+        const vwapLine = Array(times.length).fill(vwap);
+
+        const candles = {
+            x: times,
+            open: prices.map(p => p * (1 - 0.001)),
+            high: prices.map(p => p * (1 + 0.002)),
+            low: prices.map(p => p * (1 - 0.002)),
+            close: prices,
+            type: "candlestick",
+            name: symbol
+        };
+
+        const traceVWAP = {
+            x: times,
+            y: vwapLine,
+            mode: "lines",
+            name: "VWAP",
+            line: { color: "#3b82f6", width: 2 }
+        };
+
+        const sinais = prices.map((p, i) => {
+            const s = gerarSinal(p, vwap);
+            if (s === "HOLD") return null;
+            return {
+                x: times[i],
+                y: p,
+                text: s,
+                mode: "text+markers",
+                textposition: s === "COMPRA" ? "bottom center" : "top center",
+                marker: { color: corSinal(s), size: 12 },
+                textfont: { color: corSinal(s), size: 14 }
+            };
+        }).filter(Boolean);
+
+        const layout = {
+            title: `${symbol} — VWAP`,
+            margin: { t: 40, b: 30 },
+            xaxis: { showgrid: false },
+            yaxis: { fixedrange: false }
+        };
+
+        const container = document.createElement("div");
+        container.className = "chart";
+        container.id = `chart-${symbol}`;
+        charts.appendChild(container);
+
+        Plotly.newPlot(container.id, [candles, traceVWAP, ...sinais], layout, { responsive: true });
+    });
 }
 
-async function refresh() {
-  const data = await fetchData();
-  for (const item of data) {
-    updateCard(item.symbol, item);
-  }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  SYMBOLS.forEach(createCard);
-  refresh();
-  setInterval(refresh, 60000); // atualiza a cada 1 min
-});
+setInterval(renderDashboard, 60000); // 1x/min
+renderDashboard();
