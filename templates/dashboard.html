@@ -1,29 +1,19 @@
-<!doctype html>
-<html lang="pt-BR">
+<!DOCTYPE html>
+<html lang="pt-br">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VWAP Monitor Dashboard</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+    <meta charset="UTF-8">
+    <title>VWAP Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>📊 VWAP Monitor Dashboard</h1>
-      <div id="status">Carregando...</div>
-    </header>
+    <h1>📊 VWAP Monitor Dashboard</h1>
+    <div id="cards-container"></div>
+    <div id="charts-container"></div>
 
-    <main id="cards" class="cards-grid">
-      <!-- cards serão injetados pelo JS -->
-    </main>
-  </div>
-
-  <script>
-    // symbols e intervalo vindos do server
-    const SYMBOLS = {{ symbols|tojson }};
-    const UPDATE_INTERVAL = {{ update_interval }};
-  </script>
-
-  <script src="/static/js/dashboard.js"></script>
+    <script>
+        const SYMBOLS = {{ symbols|tojson|safe }};
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
