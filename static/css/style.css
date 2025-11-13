@@ -21,17 +21,17 @@ h1 {
 }
 
 .card {
-    width: 220px;
-    padding: 20px;
+    width: 250px;
+    padding: 25px;
     border-radius: 15px;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     color: #fff;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
 }
 
 .card h2 {
     margin: 0;
-    font-size: 1.3rem;
+    font-size: 1.4rem;
 }
 
 .card p {
@@ -39,7 +39,7 @@ h1 {
 }
 
 .card .sinal {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: bold;
 }
 
@@ -49,10 +49,10 @@ h1 {
 
 .chart {
     width: 95%;
-    max-width: 900px;
-    margin: 0 auto 40px auto;
+    max-width: 1000px;
+    margin: 0 auto 50px auto;
     border-radius: 10px;
     background: #fff;
-    padding: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    padding: 15px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.1);
 }
