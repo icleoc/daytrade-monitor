@@ -12,3 +12,8 @@ requests
 pandas
 numpy
 ta
+flask
+gunicorn
+requests
+pandas
+yfinance
