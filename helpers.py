@@ -1,72 +1,66 @@
-"""
-helpers.py
-Responsável por consultar TwelveData via REST, montar candles, calcular VWAP, bandas e sinais.
-Design decisions:
-- Usa TwelveData REST (sem dependências adicionais) para Forex e Commodities e CRYPTO.
-- Faz mapeamento de símbolos: BTC/USDT -> BTC/USD (TwelveData usa USD base).
-- Implementa cache simples em memória para evitar exceder rate limits (1 requisição/min por símbolo).
-- Retorna estruturas JSON-serializáveis.
-"""
-
-
 import os
-import time
-import requests
 import logging
-import pandas as pd
-import numpy as np
-from datetime import datetime
-import config
-
+from twelvedata import TDClient
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('helpers')
+
+API_KEY = os.getenv("TWELVE_API_KEY")
+
+td = TDClient(apikey=API_KEY)
 
 
-TWELVE_API_KEY = os.environ.get(config.TWELVE_API_ENV)
+def fetch_symbol_data(symbol: str, interval: str = "15min"):
+    """
+    Busca OHLCV do símbolo no intervalo desejado.
+    """
+    try:
+        logging.info(f"Buscando dados para {symbol} ({interval})...")
+
+        ts = td.time_series(
+            symbol=symbol,
+            interval=interval,
+            outputsize=1
+        )
+
+        data = ts.as_json()
+
+        if not data or "values" not in data or len(data["values"]) == 0:
+            raise ValueError(f"Nenhum dado retornado para {symbol}")
+
+        latest = data["values"][0]
+
+        return {
+            "symbol": symbol,
+            "open": float(latest["open"]),
+            "high": float(latest["high"]),
+            "low": float(latest["low"]),
+            "close": float(latest["close"]),
+            "volume": float(latest.get("volume", 0))
+        }
+
+    except Exception as e:
+        logging.error(f"Erro ao buscar {symbol}: {e}")
+        return {"symbol": symbol, "error": str(e)}
 
 
-# simples cache em memória: {symbol: {'ts': epoch, 'data': payload}}
-_cache = {}
-_cache_ttl = config.UPDATE_INTERVAL_SECONDS - 0 if config.UPDATE_INTERVAL_SECONDS > 5 else 1
+def get_all_symbols_data(symbols):
+    """
+    Retorna dados atualizados de múltiplos símbolos.
+    """
+    results = []
+
+    for s in symbols:
+        results.append(fetch_symbol_data(s))
+
+    return results
 
 
-# Mapagem para TwelveData: usamos pares com USD. Recebe por ex 'BTC/USDT' -> 'BTC/USD'
-_symbol_map = {
-'BTC/USDT': 'BTC/USD',
-'ETH/USDT': 'ETH/USD',
-'EUR/USD': 'EUR/USD',
-'XAU/USD': 'XAU/USD'
-}
-
-
-# TwelveData espera interval como '15min' (não '15m')
-def _normalize_interval(tf):
-mapping = {
-'1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '45m': '45min',
-'1h': '1h', '2h': '2h', '4h': '4h', '8h': '8h', '1d': '1day'
-}
-return mapping.get(tf, tf)
-
-
-
-
-def _twelve_time_series(symbol, interval='15min', outputsize=200):
-"""Consulta TwelveData /time_series e retorna DataFrame com colunas: datetime, open, high, low, close, volume"""
-global TWELVE_API_KEY
-if not TWELVE_API_KEY:
-raise RuntimeError('TWELVE_API_KEY ausente nas variáveis de ambiente')
-
-
-td_symbol = _symbol_map.get(symbol, symbol)
-interval_td = _normalize_interval(interval)
-
-
-url = 'https://api.twelvedata.com/time_series'
-params = {
-'symbol': td_symbol,
-'interval': interval_td,
-'outputsize': outputsize,
-'format': 'JSON',
-'apikey': TWELVE_API_KEY
-return out
+# Conversão opcional caso queira exibir nomes amigáveis no dashboard
+def normalize_symbol(symbol: str):
+    mapping = {
+        "BTC/USDT": "Bitcoin",
+        "ETH/USDT": "Ethereum",
+        "EUR/USD": "Euro x Dólar",
+        "XAU/USD": "Ouro"
+    }
+    return mapping.get(symbol, symbol)
