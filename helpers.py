@@ -61,7 +61,7 @@ def get_symbol_data(symbol):
 
 
 def get_all_symbols_data():
-    symbols = ["BTC/USDT", "ETH/USDT", "EUR/USD", "XAU/USD"]
+    symbols = ["BTCUSD", "ETHUSD", "EURUSD", "XAUUSD"]
 
     assets = []
 
