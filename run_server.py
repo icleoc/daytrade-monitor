@@ -10,7 +10,7 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 def index():
     return render_template("dashboard.html")
 
-@app.route("/api/vwap")
+@app.route("/api/data")
 def api_vwap():
     data = get_all_vwap_data()
     return jsonify({"assets": data})
