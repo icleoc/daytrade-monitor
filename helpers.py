@@ -1,69 +1,136 @@
 import os
-closes = []
-for c in candles:
-typical = (c['h'] + c['l'] + c['c']) / 3.0
-vol = c.get('v') or 0.0
-# if volume missing, fallback to 1 to allow vwap to follow price
-vol = vol if vol > 0 else 1.0
-cum_pv += typical * vol
-cum_v += vol
-vwap = cum_pv / cum_v if cum_v != 0 else c['c']
-vwap_list.append(vwap)
-closes.append(c['c'])
-# compute rolling stddev of price for bands
-import math
-bands = []
-for i in range(len(candles)):
-window = closes[max(0, i-19):i+1] # 20-period std
-mean = sum(window) / len(window)
-variance = sum((x-mean)**2 for x in window) / len(window)
-sd = math.sqrt(variance)
-upper = vwap_list[i] + band_mult * sd
-lower = vwap_list[i] - band_mult * sd
-bands.append({"vwap": vwap_list[i], "upper": upper, "lower": lower})
-return bands
+import requests
+import yfinance as yf
+import pandas as pd
 
 
-# Determine signal based on last close vs vwap
-def determine_signal(candles, bands):
-if not candles or not bands:
-return "HOLD"
-last = candles[-1]['c']
-last_vwap = bands[-1]['vwap']
-if last > last_vwap:
-return "BUY"
-elif last < last_vwap:
-return "SELL"
-else:
-return "HOLD"
+# -------------------------------------------------------------------
+# VWAP + UPPER/LOWER BAND CALC
+# -------------------------------------------------------------------
+def calculate_vwap_bands(df, band_multiplier=0.2):
+    df["typical"] = (df["high"] + df["low"] + df["close"]) / 3
+    df["vwap"] = (df["typical"] * df["volume"]).cumsum() / df["volume"].cumsum()
+
+    df["upper"] = df["vwap"] * (1 + band_multiplier)
+    df["lower"] = df["vwap"] * (1 - band_multiplier)
+    return df
 
 
-# Main orchestrator
-def fetch_all_symbols(symbols, interval="15m"):
-result = {}
-for sym in symbols:
-try:
-logger.info(f"Fetching {sym} ({interval})")
-if sym.endswith("/USDT"):
-candles = fetch_crypto_yahoo(sym, interval=interval)
-else:
-# EUR/USD and XAU/USD via Twelve Data
-candles = fetch_twelvedata(sym.replace('/', '/'), interval=interval)
-if not candles:
-result[sym] = {"error": "Sem dados", "symbol": sym}
-continue
-# compute bands
-bands = compute_vwap_and_bands(candles)
-signal = determine_signal(candles, bands)
-# Prepare JSON serializable structure
-result[sym] = {
-"symbol": sym,
-"candles": candles,
-"bands": bands,
-"signal": signal,
-"last": candles[-1]['c']
-}
-except Exception as e:
-logger.exception(f"Erro ao buscar {sym}: {e}")
-result[sym] = {"error": str(e), "symbol": sym}
-return result
+# -------------------------------------------------------------------
+# SIGNAL ENGINE
+# -------------------------------------------------------------------
+def generate_signals(df):
+    df["signal"] = "none"
+
+    # BUY: candle fechou acima da upper
+    df.loc[df["close"] > df["upper"], "signal"] = "buy"
+
+    # SELL: candle fechou abaixo da lower
+    df.loc[df["close"] < df["lower"], "signal"] = "sell"
+
+    return df
+
+
+# -------------------------------------------------------------------
+# FETCH CRYPTO FROM YFINANCE (15m)
+# -------------------------------------------------------------------
+def fetch_crypto(symbol):
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(interval="15m", period="2d")
+
+    if df.empty:
+        return None
+
+    df = df.rename(
+        columns={
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+        }
+    )
+
+    df = df[["open", "high", "low", "close", "volume"]]
+    df = calculate_vwap_bands(df)
+    df = generate_signals(df)
+
+    return df
+
+
+# -------------------------------------------------------------------
+# FETCH FOREX / METALS FROM TWELVE DATA (15m)
+# -------------------------------------------------------------------
+def fetch_twelvedata(symbol):
+    api_key = os.getenv("TWELVE_API_KEY")
+    if not api_key:
+        raise Exception("TWELVE_API_KEY não encontrado no Render")
+
+    url = (
+        f"https://api.twelvedata.com/time_series?symbol={symbol}"
+        f"&interval=15min&apikey={api_key}&outputsize=200"
+    )
+
+    response = requests.get(url).json()
+
+    if "values" not in response:
+        print("Erro Twelve:", response)
+        return None
+
+    data = response["values"]
+
+    df = pd.DataFrame(data)
+    df = df.rename(
+        columns={
+            "open": "open",
+            "high": "high",
+            "low": "low",
+            "close": "close",
+            "volume": "volume",
+        }
+    )
+
+    df = df.astype(
+        {"open": float, "high": float, "low": float, "close": float, "volume": float}
+    )
+
+    df = df[::-1]  # inverter ordem: mais antigo → mais novo
+
+    df = calculate_vwap_bands(df)
+    df = generate_signals(df)
+
+    return df
+
+
+# -------------------------------------------------------------------
+# MASTER DISPATCH (AUTO CHOOSE PROVIDER)
+# -------------------------------------------------------------------
+def get_symbol_data(symbol):
+    crypto_list = ["BTC-USD", "ETH-USD"]
+
+    if symbol in crypto_list:
+        return fetch_crypto(symbol)
+    else:
+        return fetch_twelvedata(symbol)
+
+
+# -------------------------------------------------------------------
+# MULTIPLE SYMBOLS
+# -------------------------------------------------------------------
+def get_all_symbols_data():
+    mapping = {
+        "BTC/USDT": "BTC-USD",
+        "ETH/USDT": "ETH-USD",
+        "EUR/USD": "EUR/USD",
+        "XAU/USD": "XAU/USD",
+    }
+
+    results = {}
+
+    for label, real_symbol in mapping.items():
+        df = get_symbol_data(real_symbol)
+        if df is not None:
+            results[label] = df.tail(120).to_dict(orient="list")
+
+    return results
+
