@@ -1,74 +1,157 @@
-const main = document.getElementById('cards');
-chartEl.innerHTML = '<div class="err">Sem dados</div>';
-card.style.backgroundColor = '#f2f2f2';
-return;
+async function fetchData() {
+    const res = await fetch("/api/data");
+    return await res.json();
 }
 
-
-statusEl.textContent = data.signal || 'HOLD';
-priceEl.textContent = `Último preço: ${data.last}`;
-// color card
-if (data.signal === 'BUY') card.style.backgroundColor = '#e6ffed';
-else if (data.signal === 'SELL') card.style.backgroundColor = '#ffe6e6';
-else card.style.backgroundColor = 'white';
-
-
-// build plotly candlestick
-const candles = data.candles.map(c => ({
-t: new Date(c.t), o: c.o, h: c.h, l: c.l, c: c.c
-}));
-const times = candles.map(c => c.t);
-const traceCandle = {
-x: times,
-open: candles.map(c=>c.o),
-high: candles.map(c=>c.h),
-low: candles.map(c=>c.l),
-close: candles.map(c=>c.c),
-type: 'candlestick',
-name: 'Price'
-};
-const vwap = data.bands.map(b => b.vwap);
-const upper = data.bands.map(b => b.upper);
-const lower = data.bands.map(b => b.lower);
-const traceVwap = { x: times, y: vwap, type: 'scatter', mode: 'lines', name: 'VWAP' };
-const traceUpper = { x: times, y: upper, type: 'scatter', mode: 'lines', name: 'Upper' };
-const traceLower = { x: times, y: lower, type: 'scatter', mode: 'lines', name: 'Lower' };
-
-
-const annotations = [];
-// mark last signal on chart
-if (data.signal && data.signal !== 'HOLD') {
-const lastIdx = times.length - 1;
-annotations.push({
-x: times[lastIdx], y: candles[lastIdx].c,
-xref: 'x', yref: 'y', showarrow: true,
-arrowhead: 2,
-ax: 0, ay: data.signal === 'BUY' ? 30 : -30,
-text: data.signal === 'BUY' ? 'COMPRA' : 'VENDA',
-font: {color: '#000'}
-});
+function createCard(symbol) {
+    const tpl = document.getElementById("card-template");
+    const card = tpl.content.cloneNode(true);
+    card.querySelector(".sym").textContent = symbol;
+    return card;
 }
 
-
-const layout = { margin: {t:20}, annotations };
-Plotly.newPlot(chartEl, [traceCandle, traceVwap, traceUpper, traceLower], layout, {responsive:true});
+function getLastSignal(df) {
+    const signals = df.signal;
+    for (let i = signals.length - 1; i >= 0; i--) {
+        if (signals[i] === "buy" || signals[i] === "sell") {
+            return signals[i];
+        }
+    }
+    return "none";
 }
 
+function renderChart(container, df) {
+    const time = df.time;
+    const open = df.open;
+    const high = df.high;
+    const low = df.low;
+    const close = df.close;
+    const vwap = df.vwap;
+    const upper = df.upper;
+    const lower = df.lower;
 
-async function refresh(){
-try{
-const res = await fetch('/api/data');
-if(!res.ok) throw new Error(await res.text());
-const j = await res.json();
-for(const sym of SYMBOLS){
-createOrUpdateCard(sym, j[sym] || {error: 'Sem dados'});
-}
-}catch(err){
-console.error('Fetch error', err);
-}
+    // Buy / Sell markers
+    const buy_x = [];
+    const buy_y = [];
+    const sell_x = [];
+    const sell_y = [];
+
+    df.signal.forEach((sig, i) => {
+        if (sig === "buy") {
+            buy_x.push(time[i]);
+            buy_y.push(low[i] * 0.998);
+        }
+        if (sig === "sell") {
+            sell_x.push(time[i]);
+            sell_y.push(high[i] * 1.002);
+        }
+    });
+
+    const candleTrace = {
+        x: time,
+        open,
+        high,
+        low,
+        close,
+        type: "candlestick",
+        name: "Candles",
+    };
+
+    const vwapTrace = {
+        x: time,
+        y: vwap,
+        mode: "lines",
+        name: "VWAP",
+        line: { width: 2 }
+    };
+
+    const upperTrace = {
+        x: time,
+        y: upper,
+        mode: "lines",
+        name: "Upper",
+        line: { dash: "dot" }
+    };
+
+    const lowerTrace = {
+        x: time,
+        y: lower,
+        mode: "lines",
+        name: "Lower",
+        line: { dash: "dot" }
+    };
+
+    const buyTrace = {
+        x: buy_x,
+        y: buy_y,
+        mode: "markers+text",
+        name: "BUY",
+        text: "COMPRA",
+        textposition: "bottom center",
+        marker: { size: 14, color: "green" }
+    };
+
+    const sellTrace = {
+        x: sell_x,
+        y: sell_y,
+        mode: "markers+text",
+        name: "SELL",
+        text: "VENDA",
+        textposition: "top center",
+        marker: { size: 14, color: "red" }
+    };
+
+    Plotly.newPlot(
+        container,
+        [candleTrace, vwapTrace, upperTrace, lowerTrace, buyTrace, sellTrace],
+        {
+            margin: { t: 20, b: 30 },
+            showlegend: true
+        }
+    );
 }
 
+async function updateDashboard() {
+    const data = await fetchData();
 
-// Initial
-refresh();
-setInterval(refresh, UPDATE_INTERVAL);
+    const cardsDiv = document.getElementById("cards");
+    cardsDiv.innerHTML = ""; // reset
+
+    SYMBOLS.forEach(symbol => {
+        const df = data[symbol];
+        if (!df) return;
+
+        const card = createCard(symbol);
+        const el = card.querySelector(".card");
+
+        // STATUS SIGNAL
+        const lastSignal = getLastSignal(df);
+        const status = card.querySelector(".status");
+
+        if (lastSignal === "buy") {
+            status.textContent = "COMPRA";
+            el.style.borderColor = "green";
+        } else if (lastSignal === "sell") {
+            status.textContent = "VENDA";
+            el.style.borderColor = "red";
+        } else {
+            status.textContent = "NEUTRO";
+            el.style.borderColor = "#999";
+        }
+
+        // PRICE
+        const price = df.close[df.close.length - 1];
+        card.querySelector(".price").textContent =
+            "Último preço: " + price.toFixed(5);
+
+        // CHART
+        const chartDiv = card.querySelector(".chart");
+        renderChart(chartDiv, df);
+
+        cardsDiv.appendChild(card);
+    });
+}
+
+// Start
+updateDashboard();
+setInterval(updateDashboard, UPDATE_INTERVAL);
