@@ -71,13 +71,15 @@ def fetch_twelvedata(symbol):
 
     df = pd.DataFrame(response["values"])
 
-    df = df.astype({
-        "open": float,
-        "high": float,
-        "low": float,
-        "close": float,
-        "volume": float,
-    })
+   # Converte apenas as colunas que realmente existem
+for col in ["open", "high", "low", "close", "volume"]:
+    if col in df.columns:
+        df[col] = df[col].astype(float)
+    else:
+        # Se volume não existe, cria coluna com 1 para preservar VWAP
+        if col == "volume":
+            df["volume"] = 1.0
+
 
     df = df[::-1]  # inverter ordem
 
