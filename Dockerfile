@@ -1,13 +1,12 @@
-# Python 3.12.17 slim (garante compatibilidade)
+# Python 3.12.17 slim
 FROM python:3.12.17-slim
 
 WORKDIR /app
 
-# Evita compilação de dependências problemáticas
 ENV PIP_NO_CACHE_DIR=1
 ENV PYTHONUNBUFFERED=1
 
-# Instala dependências do sistema para pandas/numpy
+# Dependências mínimas necessárias
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
@@ -15,18 +14,15 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia requirements
+# Instala dependências
 COPY requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Atualiza pip e instala pacotes
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
-
-# Copia o restante do projeto
+# Copia o projeto
 COPY . .
 
 # Expõe porta
 EXPOSE 5000
 
-# Comando para iniciar
-CMD ["python", "run_server.py"]
+# Usa Gunicorn no entrypoint
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:5000", "run_server:app"]
