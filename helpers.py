@@ -1,31 +1,32 @@
 import os
 import logging
-from twelvedata import TDClient
+import requests
 
 logging.basicConfig(level=logging.INFO)
 
 API_KEY = os.getenv("TWELVE_API_KEY")
-
-td = TDClient(apikey=API_KEY)
+BASE_URL = "https://api.twelvedata.com/time_series"
 
 
 def fetch_symbol_data(symbol: str, interval: str = "15min"):
     """
-    Busca OHLCV do símbolo no intervalo desejado.
+    Busca OHLCV diretamente da API TwelveData via HTTP.
     """
     try:
         logging.info(f"Buscando dados para {symbol} ({interval})...")
 
-        ts = td.time_series(
-            symbol=symbol,
-            interval=interval,
-            outputsize=1
-        )
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "apikey": API_KEY,
+            "outputsize": 1
+        }
 
-        data = ts.as_json()
+        response = requests.get(BASE_URL, params=params)
+        data = response.json()
 
-        if not data or "values" not in data or len(data["values"]) == 0:
-            raise ValueError(f"Nenhum dado retornado para {symbol}")
+        if "values" not in data:
+            raise ValueError(f"Erro retorno API: {data}")
 
         latest = data["values"][0]
 
@@ -35,7 +36,7 @@ def fetch_symbol_data(symbol: str, interval: str = "15min"):
             "high": float(latest["high"]),
             "low": float(latest["low"]),
             "close": float(latest["close"]),
-            "volume": float(latest.get("volume", 0))
+            "volume": float(latest.get("volume", 0)),
         }
 
     except Exception as e:
@@ -45,17 +46,14 @@ def fetch_symbol_data(symbol: str, interval: str = "15min"):
 
 def get_all_symbols_data(symbols):
     """
-    Retorna dados atualizados de múltiplos símbolos.
+    Retorna dados de múltiplos símbolos.
     """
     results = []
-
     for s in symbols:
         results.append(fetch_symbol_data(s))
-
     return results
 
 
-# Conversão opcional caso queira exibir nomes amigáveis no dashboard
 def normalize_symbol(symbol: str):
     mapping = {
         "BTC/USDT": "Bitcoin",
