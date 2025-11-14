@@ -1,119 +1,117 @@
 import os
 import requests
-import yfinance as yf
 import pandas as pd
 
 
-# -------------------------------------------------------------------
-# VWAP + UPPER/LOWER BAND CALC
-# -------------------------------------------------------------------
-def calculate_vwap_bands(df, band_multiplier=0.2):
-    df["typical"] = (df["high"] + df["low"] + df["close"]) / 3
-    df["vwap"] = (df["typical"] * df["volume"]).cumsum() / df["volume"].cumsum()
+# ------------------------------------------------------------
+# Provider selection
+# ------------------------------------------------------------
+PROVIDER = "twelvedata"
+API_KEY = os.getenv("TWELVE_API_KEY")
 
-    df["upper"] = df["vwap"] * (1 + band_multiplier)
-    df["lower"] = df["vwap"] * (1 - band_multiplier)
-    return df
-
-
-# -------------------------------------------------------------------
-# SIGNAL ENGINE
-# -------------------------------------------------------------------
-def generate_signals(df):
-    df["signal"] = "none"
-    df.loc[df["close"] > df["upper"], "signal"] = "buy"
-    df.loc[df["close"] < df["lower"], "signal"] = "sell"
-    return df
-
-
-# -------------------------------------------------------------------
-# FETCH CRYPTO FROM YFINANCE (15m)
-# -------------------------------------------------------------------
-def fetch_crypto(symbol):
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(interval="15m", period="2d")
-
-    if df.empty:
-        return None
-
-    df = df.rename(columns={
-        "Open": "open",
-        "High": "high",
-        "Low": "low",
-        "Close": "close",
-        "Volume": "volume"
-    })
-
-    df = df[["open", "high", "low", "close", "volume"]]
-    df = calculate_vwap_bands(df)
-    df = generate_signals(df)
-    return df
-
-
-# -------------------------------------------------------------------
-# FETCH FOREX / METALS FROM TWELVE DATA (15m)
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Fetch data from TwelveData
+# ------------------------------------------------------------
 def fetch_twelvedata(symbol):
-    api_key = os.getenv("TWELVE_API_KEY")
-    if not api_key:
-        raise Exception("TWELVE_API_KEY não encontrado no Render")
+    url = "https://api.twelvedata.com/time_series"
+    params = {
+        "symbol": symbol,
+        "interval": "15min",
+        "apikey": API_KEY,
+        "outputsize": 200
+    }
 
-    url = (
-        "https://api.twelvedata.com/time_series"
-        f"?symbol={symbol}&interval=15min&apikey={api_key}&outputsize=200"
-    )
+    r = requests.get(url, params=params, timeout=10)
+    data = r.json()
 
-    response = requests.get(url).json()
+    if "values" not in data:
+        raise Exception(f"Erro na TwelveData: {data}")
 
-    if "values" not in response:
-        print("Erro TwelveData:", response)
-        return None
+    df = pd.DataFrame(data["values"])
+    df = df.rename(columns=str.lower)
 
-    df = pd.DataFrame(response["values"])
+    # Garantir que colunas existam
+    required_cols = ["open", "high", "low", "close", "volume"]
+    for col in required_cols:
+        if col not in df.columns:
+            # Volume pode não existir em Forex e outros: fallback = 1
+            if col == "volume":
+                df[col] = 1.0
+            else:
+                df[col] = None
 
-   # Converte apenas as colunas que realmente existem
-for col in ["open", "high", "low", "close", "volume"]:
-    if col in df.columns:
-        df[col] = df[col].astype(float)
-    else:
-        # Se volume não existe, cria coluna com 1 para preservar VWAP
-        if col == "volume":
-            df["volume"] = 1.0
+    # Conversões seguras
+    for col in required_cols:
+        try:
+            df[col] = df[col].astype(float)
+        except:
+            pass
 
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df = df.sort_values("datetime")
 
-    df = df[::-1]  # inverter ordem
-
-    df = calculate_vwap_bands(df)
-    df = generate_signals(df)
     return df
 
 
-# -------------------------------------------------------------------
-# MASTER DISPATCH
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Calculate VWAP + Bands
+# ------------------------------------------------------------
+def compute_vwap(df):
+    df["typical"] = (df["high"] + df["low"] + df["close"]) / 3
+    df["cum_vol"] = df["volume"].cumsum()
+    df["cum_tpv"] = (df["typical"] * df["volume"]).cumsum()
+
+    df["vwap"] = df["cum_tpv"] / df["cum_vol"]
+
+    # Desvio padrão para bands
+    df["upper"] = df["vwap"] + df["typical"].rolling(20).std()
+    df["lower"] = df["vwap"] - df["typical"].rolling(20).std()
+
+    return df
+
+
+# ------------------------------------------------------------
+# Unified fetch
+# ------------------------------------------------------------
 def get_symbol_data(symbol):
-    crypto_list = ["BTC-USD", "ETH-USD"]
-    if symbol in crypto_list:
-        return fetch_crypto(symbol)
     return fetch_twelvedata(symbol)
 
 
-# -------------------------------------------------------------------
-# MULTIPLE SYMBOLS
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Multiple assets processing
+# ------------------------------------------------------------
 def get_all_symbols_data():
-    mapping = {
-        "BTC/USDT": "BTC-USD",
-        "ETH/USDT": "ETH-USD",
-        "EUR/USD": "EUR/USD",
-        "XAU/USD": "XAU/USD",
-    }
+    symbols = [
+        "BTC/USDT",
+        "ETH/USDT",
+        "EUR/USD",
+        "XAU/USD"
+    ]
 
-    results = {}
+    result = {}
 
-    for label, provider_symbol in mapping.items():
-        df = get_symbol_data(provider_symbol)
-        if df is not None:
-            results[label] = df.tail(120).to_dict(orient="list")
+    for sym in symbols:
+        try:
+            df = get_symbol_data(sym)
+            df = compute_vwap(df)
 
-    return results
+            last = df.iloc[-1]
+
+            result[sym] = {
+                "last_price": float(last["close"]),
+                "vwap": float(last["vwap"]),
+                "upper": float(last["upper"]) if not pd.isna(last["upper"]) else None,
+                "lower": float(last["lower"]) if not pd.isna(last["lower"]) else None,
+                "history": {
+                    "datetime": df["datetime"].astype(str).tolist(),
+                    "close": df["close"].tolist(),
+                    "vwap": df["vwap"].tolist(),
+                    "upper": df["upper"].tolist(),
+                    "lower": df["lower"].tolist(),
+                }
+            }
+
+        except Exception as e:
+            result[sym] = {"error": str(e)}
+
+    return result
