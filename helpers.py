@@ -47,7 +47,6 @@ def compute_vwap(df):
     df["typical"] = (df["high"] + df["low"] + df["close"]) / 3
     df["cum_vol"] = df["volume"].cumsum()
     df["cum_tpv"] = (df["typical"] * df["volume"]).cumsum()
-
     df["vwap"] = df["cum_tpv"] / df["cum_vol"]
 
     df["upper"] = df["vwap"] + df["typical"].rolling(20).std()
@@ -61,7 +60,13 @@ def get_symbol_data(symbol):
 
 
 def get_all_symbols_data():
-    symbols = ["BTCUSD", "ETHUSD", "EURUSD", "XAUUSD"]
+    # 🔥 Correção principal: símbolos REAIS da TwelveData
+    symbols = [
+        "BTC/USD",
+        "ETH/USD",
+        "EUR/USD",
+        "XAU/USD"
+    ]
 
     assets = []
 
@@ -72,11 +77,10 @@ def get_all_symbols_data():
 
             last = df.iloc[-1]
 
-            # Formato esperado pelo dashboard
             assets.append({
                 "symbol": sym,
                 "last_price": float(last["close"]),
-                "signal": "—",   # pode ser substituído por BUY/SELL inteligente
+                "signal": "—",
                 "timestamps": df["datetime"].astype(str).tolist(),
                 "prices": df["close"].tolist(),
                 "vwap": df["vwap"].tolist()
