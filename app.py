@@ -16,7 +16,7 @@ def index():
 
 @app.route("/api/data")
 def api_data():
-    data = get_all_symbols_data(SYMBOLS)
+    data = get_all_symbols_data()   # << CORREÇÃO AQUI
     return jsonify(data)
 
 if __name__ == "__main__":
