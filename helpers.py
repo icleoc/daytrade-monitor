@@ -21,13 +21,8 @@ def calculate_vwap_bands(df, band_multiplier=0.2):
 # -------------------------------------------------------------------
 def generate_signals(df):
     df["signal"] = "none"
-
-    # BUY: candle fechou acima da upper
     df.loc[df["close"] > df["upper"], "signal"] = "buy"
-
-    # SELL: candle fechou abaixo da lower
     df.loc[df["close"] < df["lower"], "signal"] = "sell"
-
     return df
 
 
@@ -41,20 +36,17 @@ def fetch_crypto(symbol):
     if df.empty:
         return None
 
-    df = df.rename(
-        columns={
-            "Open": "open",
-            "High": "high",
-            "Low": "low",
-            "Close": "close",
-            "Volume": "volume",
-        }
-    )
+    df = df.rename(columns={
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Volume": "volume"
+    })
 
     df = df[["open", "high", "low", "close", "volume"]]
     df = calculate_vwap_bands(df)
     df = generate_signals(df)
-
     return df
 
 
@@ -67,51 +59,41 @@ def fetch_twelvedata(symbol):
         raise Exception("TWELVE_API_KEY não encontrado no Render")
 
     url = (
-        f"https://api.twelvedata.com/time_series?symbol={symbol}"
-        f"&interval=15min&apikey={api_key}&outputsize=200"
+        "https://api.twelvedata.com/time_series"
+        f"?symbol={symbol}&interval=15min&apikey={api_key}&outputsize=200"
     )
 
     response = requests.get(url).json()
 
     if "values" not in response:
-        print("Erro Twelve:", response)
+        print("Erro TwelveData:", response)
         return None
 
-    data = response["values"]
+    df = pd.DataFrame(response["values"])
 
-    df = pd.DataFrame(data)
-    df = df.rename(
-        columns={
-            "open": "open",
-            "high": "high",
-            "low": "low",
-            "close": "close",
-            "volume": "volume",
-        }
-    )
+    df = df.astype({
+        "open": float,
+        "high": float,
+        "low": float,
+        "close": float,
+        "volume": float,
+    })
 
-    df = df.astype(
-        {"open": float, "high": float, "low": float, "close": float, "volume": float}
-    )
-
-    df = df[::-1]  # inverter ordem: mais antigo → mais novo
+    df = df[::-1]  # inverter ordem
 
     df = calculate_vwap_bands(df)
     df = generate_signals(df)
-
     return df
 
 
 # -------------------------------------------------------------------
-# MASTER DISPATCH (AUTO CHOOSE PROVIDER)
+# MASTER DISPATCH
 # -------------------------------------------------------------------
 def get_symbol_data(symbol):
     crypto_list = ["BTC-USD", "ETH-USD"]
-
     if symbol in crypto_list:
         return fetch_crypto(symbol)
-    else:
-        return fetch_twelvedata(symbol)
+    return fetch_twelvedata(symbol)
 
 
 # -------------------------------------------------------------------
@@ -127,10 +109,9 @@ def get_all_symbols_data():
 
     results = {}
 
-    for label, real_symbol in mapping.items():
-        df = get_symbol_data(real_symbol)
+    for label, provider_symbol in mapping.items():
+        df = get_symbol_data(provider_symbol)
         if df is not None:
             results[label] = df.tail(120).to_dict(orient="list")
 
     return results
-
